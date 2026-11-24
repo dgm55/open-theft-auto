@@ -46,6 +46,7 @@ const ARM_DOWN := 1.45
 
 const _X := Vector3(1, 0, 0)      # skeleton-space left/right axis (limb swing)
 const _Z := Vector3(0, 0, 1)      # skeleton-space forward axis (arms down)
+const RAGDOLL_COLLISION_LAYER := 1 << 19
 
 const DEFAULT_KIND := "ubc"
 
@@ -320,6 +321,128 @@ static func animate(node: Node3D, phase: float, moving: bool, leg_amp := 0.7, ar
 	lim.armR.rotation.x = sw * arm_amp
 
 
+## Create a small physics skeleton only for the player after death. NPCs and
+## normal player movement keep the project's kinematic collision path.
+static func start_ragdoll(node: Node3D, initial_velocity := Vector3.ZERO) -> PhysicalBoneSimulator3D:
+	if node.has_meta("ragdoll_simulator"):
+		var existing := node.get_meta("ragdoll_simulator") as PhysicalBoneSimulator3D
+		if is_instance_valid(existing):
+			return existing
+	var skeleton := node.get_meta("skel") as Skeleton3D
+	if not is_instance_valid(skeleton):
+		return null
+
+	var profile := [
+		{"needle": "pelvis", "shape": "box", "size": Vector3(0.30, 0.18, 0.21), "mass": 3.6, "joint": 0},
+		{"needle": "spine_03", "shape": "sphere", "radius": 0.14, "mass": 1.4, "joint": 2},
+		{"needle": "spine_05", "shape": "sphere", "radius": 0.12, "mass": 1.0, "joint": 2},
+		{"needle": "head", "shape": "sphere", "radius": 0.12, "mass": 0.65, "joint": 2},
+		{"needle": "upperarm_l", "shape": "capsule", "radius": 0.065, "mass": 0.8, "joint": 2},
+		{"needle": "lowerarm_l", "shape": "capsule", "radius": 0.052, "mass": 0.55, "joint": 3},
+		{"needle": "hand_l", "shape": "sphere", "radius": 0.065, "mass": 0.2, "joint": 2},
+		{"needle": "upperarm_r", "shape": "capsule", "radius": 0.065, "mass": 0.8, "joint": 2},
+		{"needle": "lowerarm_r", "shape": "capsule", "radius": 0.052, "mass": 0.55, "joint": 3},
+		{"needle": "hand_r", "shape": "sphere", "radius": 0.065, "mass": 0.2, "joint": 2},
+		{"needle": "thigh_l", "shape": "capsule", "radius": 0.09, "mass": 1.7, "joint": 2},
+		{"needle": "calf_l", "shape": "capsule", "radius": 0.065, "mass": 0.9, "joint": 3},
+		{"needle": "foot_l", "shape": "box", "size": Vector3(0.11, 0.08, 0.22), "mass": 0.3, "joint": 3},
+		{"needle": "thigh_r", "shape": "capsule", "radius": 0.09, "mass": 1.7, "joint": 2},
+		{"needle": "calf_r", "shape": "capsule", "radius": 0.065, "mass": 0.9, "joint": 3},
+		{"needle": "foot_r", "shape": "box", "size": Vector3(0.11, 0.08, 0.22), "mass": 0.3, "joint": 3},
+	]
+	var resolved: Dictionary = {}
+	for entry in profile:
+		var bone_idx := _find_bone_like(skeleton, entry.needle)
+		if bone_idx >= 0:
+			resolved[bone_idx] = entry
+	if resolved.is_empty():
+		return null
+
+	var simulator := PhysicalBoneSimulator3D.new()
+	simulator.name = "DeathRagdoll"
+	skeleton.add_child(simulator)
+	var physical_by_index: Dictionary = {}
+	var simulated_bones: Array[StringName] = []
+	for bone_idx in resolved:
+		var entry: Dictionary = resolved[bone_idx]
+		var bone_name := skeleton.get_bone_name(bone_idx)
+		var physical_bone := PhysicalBone3D.new()
+		physical_bone.name = "PhysicalBone_" + bone_name.validate_node_name()
+		physical_bone.bone_name = bone_name
+		physical_bone.joint_type = int(entry.joint)
+		physical_bone.mass = float(entry.mass)
+		physical_bone.friction = 0.85
+		physical_bone.linear_damp = 0.45
+		physical_bone.angular_damp = 2.5
+		physical_bone.collision_layer = RAGDOLL_COLLISION_LAYER
+		physical_bone.collision_mask = RAGDOLL_COLLISION_LAYER
+		simulator.add_child(physical_bone)
+		physical_by_index[bone_idx] = physical_bone
+		simulated_bones.append(StringName(bone_name))
+
+		var collision := CollisionShape3D.new()
+		collision.name = "RagdollShape"
+		match String(entry.shape):
+			"box":
+				var box_shape := BoxShape3D.new()
+				box_shape.size = entry.size
+				collision.shape = box_shape
+			"sphere":
+				var sphere_shape := SphereShape3D.new()
+				sphere_shape.radius = float(entry.radius)
+				collision.shape = sphere_shape
+			"capsule":
+				var radius := float(entry.radius)
+				var child_idx: int = _find_ragdoll_descendant(skeleton, bone_idx, resolved)
+				if child_idx >= 0:
+					var bone_rest := skeleton.get_bone_global_rest(bone_idx)
+					var child_rest := skeleton.get_bone_global_rest(child_idx)
+					var bone_axis := bone_rest.basis.inverse() * (child_rest.origin - bone_rest.origin)
+					var bone_length := bone_axis.length()
+					var capsule_shape := CapsuleShape3D.new()
+					capsule_shape.radius = radius
+					capsule_shape.height = maxf(bone_length + radius * 2.0, radius * 2.0)
+					collision.shape = capsule_shape
+					if bone_length > 0.001:
+						collision.position = bone_axis * 0.5
+						collision.quaternion = Quaternion(Vector3.UP, bone_axis.normalized())
+				else:
+					var fallback_shape := SphereShape3D.new()
+					fallback_shape.radius = radius
+					collision.shape = fallback_shape
+		physical_bone.add_child(collision)
+
+	for bone_idx in physical_by_index:
+		var ancestor := skeleton.get_bone_parent(bone_idx)
+		while ancestor >= 0:
+			if physical_by_index.has(ancestor):
+				(physical_by_index[bone_idx] as PhysicalBone3D).add_collision_exception_with(physical_by_index[ancestor])
+				break
+			ancestor = skeleton.get_bone_parent(ancestor)
+
+	node.set_meta("ragdoll_simulator", simulator)
+	simulator.physical_bones_start_simulation(simulated_bones)
+	var pelvis_idx := _find_bone_like(skeleton, "pelvis")
+	if physical_by_index.has(pelvis_idx):
+		var pelvis := physical_by_index[pelvis_idx] as PhysicalBone3D
+		pelvis.apply_central_impulse((Vector3.UP * 1.4 + initial_velocity * 0.25) * pelvis.mass)
+	return simulator
+
+
+static func stop_ragdoll(node: Node3D) -> void:
+	var simulator := node.get_meta("ragdoll_simulator", null) as PhysicalBoneSimulator3D
+	if is_instance_valid(simulator):
+		simulator.physical_bones_stop_simulation()
+		simulator.queue_free()
+	if node.has_meta("ragdoll_simulator"):
+		node.remove_meta("ragdoll_simulator")
+	var skeleton := node.get_meta("skel", null) as Skeleton3D
+	if is_instance_valid(skeleton):
+		skeleton.reset_bone_poses()
+		if skeleton.has_meta("pose_cache"):
+			skeleton.remove_meta("pose_cache")
+
+
 ## Seated riding pose for the rigged figure — thighs tucked forward to the
 ## pegs, arms reaching the handlebars. Same bones as the walk cycle, so the
 ## next animate() call recovers the standing pose. The bone-attached weapon
@@ -429,6 +552,18 @@ static func _measure_arm_down(sk: Skeleton3D, bonemap: Dictionary) -> float:
 		return ARM_DOWN
 	var current_angle := atan2(v.y, v.x)
 	return wrapf(-PI * 0.5 - current_angle, -PI, PI)
+
+
+static func _find_ragdoll_descendant(skeleton: Skeleton3D, bone_idx: int, selected: Dictionary) -> int:
+	var children: PackedInt32Array = skeleton.get_bone_children(bone_idx)
+	for child_idx in children:
+		if selected.has(child_idx):
+			return child_idx
+	for child_idx in children:
+		var descendant: int = _find_ragdoll_descendant(skeleton, child_idx, selected)
+		if descendant >= 0:
+			return descendant
+	return -1
 
 
 # =====================================================================

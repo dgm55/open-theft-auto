@@ -7,6 +7,14 @@ rigs). Movement/collision is **pure kinematic AABB** (custom `collides_at` test,
 physics bodies) — the only Godot-physics object in the game is the Moon's trimesh
 collider for the buggy/spacecraft.
 
+**Authorized local addition (2026-10-14):** the player may use a bounded
+`PhysicalBoneSimulator3D` death ragdoll while on foot. It is created only after
+death and removed on respawn; a temporary local support floor and nearby AABB
+proxies are limited to a dedicated collision layer. Normal locomotion and all
+other world movement remain kinematic. This is an explicit deviation from the
+original no-physics-bodies constraint; do not extend it to other systems without
+authorization.
+
 ---
 
 ## 1. Tech foundation

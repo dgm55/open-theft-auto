@@ -13,13 +13,17 @@ and note it in a DEVIATIONS.md.
 1. **Engine:** Godot 4.7+ (standard build, NOT .NET). Everything in **pure GDScript**.
    No C#, no GDExtension, no third-party plugins, no build step. The project must run by
    opening the folder in Godot and pressing F5.
-2. **No physics bodies.** All movement (player, cars, aircraft, NPCs, bullets,
+2. **No physics bodies for normal gameplay.** All movement (player, cars, aircraft, NPCs, bullets,
    particles) is pure kinematic: positions integrated by hand each frame, collision via
    a custom AABB query `collides_at(x, z, radius, altitude) -> bool` backed by a spatial
    hash (24 m cells) over `{x, z, w, d, h}` boxes, with altitude gating so fliers pass
    over rooftops, plus walkable-zone whitelists and water/coastline blocks. The single
    exception: the Moon's terrain uses one StaticBody3D trimesh collider (for the buggy
    and spacecraft); the on-foot player samples an analytic `moon_height(x, z)` function.
+   A user-authorized scoped exception permits PhysicalBone3D ragdoll only when the
+   on-foot player dies. Its temporary local floor/building colliders are removed on
+   respawn. Do not use these bodies for locomotion, vehicles, NPCs or other systems
+   unless the user explicitly expands this exception.
 3. **Everything procedural.** The entire city, airport, islands, Moon, F1 circuit,
    buildings, props, and ALL UI are generated in code. No .tscn files for UI (build
    Control trees in `_build()` methods), no textures except a tiling road/footpath

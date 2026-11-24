@@ -102,6 +102,11 @@ first-person view; the **sniper** rolls a proper scope in with an animated zoom.
 On a controller, aim-assist gently sticks your reticle to the nearest target.
 A dedicated **melee** strike works with any loadout.
 
+On foot, the player walks at 4.5 m/s and sprints at 8 m/s. An on-foot death
+activates a physics ragdoll on the existing player rig; respawning removes the
+temporary ragdoll and restores the player. Death while in a vehicle, flight suit,
+or parachute remains outside this ragdoll's scope.
+
 ### Vehicles
 
 - **Cars** — hop into anything on the street, or buy your own at **Free Harbor

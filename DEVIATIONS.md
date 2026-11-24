@@ -74,3 +74,17 @@ following intentional differences exist.
 - Script files are consolidated slightly versus the spec's suggested tree
   (e.g. world generation + collision live together in `world.gd`). All
   systems from the spec are present.
+
+## User-authorized movement and death-ragdoll update (2026-10-14)
+
+- On-foot speeds were restored to the values documented in `REBUILD_SPEC.md`:
+  4.5 m/s walking and 8.0 m/s sprinting. `tests/movement_audit.tscn` now checks
+  the analog walk range and verifies sprint is faster.
+- A physical ragdoll is built only for the player after an on-foot death. It
+  uses the existing Peter rig, a selected set of 16 major bones, constrained
+  joints and temporary nearby collision proxies on a dedicated layer. Respawn
+  stops and removes the simulator/proxies, repositions the player, and clears
+  residual movement velocity.
+- Deaths while in a vehicle, wearing the flight suit, or parachuting do not
+  start this ragdoll; those cases remain outside the verified scope. NPCs,
+  vehicles and normal movement remain kinematic.

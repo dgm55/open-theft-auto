@@ -2,12 +2,13 @@ extends "res://scripts/game.gd"
 var test_x := 0.0
 var test_z := 0.0
 var test_climb := 0.0
+var test_sprint := false
 var issues: Array[String] = []
 func _move_x() -> float: return test_x
 func _move_z() -> float: return test_z
 func _updown() -> float: return test_climb
 func _drive_accel() -> float: return test_z
-func _sprint_held() -> bool: return false
+func _sprint_held() -> bool: return test_sprint
 func _ready() -> void:
 	super._ready()
 	set_process(false)
@@ -21,12 +22,19 @@ func audit() -> void:
 	test_z = 0.4
 	for i in 60: _update_on_foot(1.0/60.0)
 	var slow_distance := 20.0-player_pos.z
-	expect(slow_distance > 0.9 and slow_distance < 1.2, "Analog walk speed")
+	expect(slow_distance > 1.6 and slow_distance < 1.9, "Analog walk speed")
 	player_pos = Vector3(112, 0, 20)
 	_walk_vel = Vector2.ZERO
 	test_z = 1
 	for i in 60: _update_on_foot(1.0/60.0)
-	expect(20.0-player_pos.z > slow_distance*2, "Full stick fails to increase speed")
+	var full_walk_distance := 20.0-player_pos.z
+	expect(full_walk_distance > slow_distance*2, "Full stick fails to increase speed")
+	player_pos = Vector3(112, 0, 20)
+	_walk_vel = Vector2.ZERO
+	test_sprint = true
+	for i in 60: _update_on_foot(1.0/60.0)
+	expect(20.0-player_pos.z > full_walk_distance*1.4, "Sprint fails to increase speed")
+	test_sprint = false
 	test_z = 0
 	for i in 30: _update_on_foot(1.0/60.0)
 	expect(_walk_vel.length() < 0.01, "Walking slides after release")

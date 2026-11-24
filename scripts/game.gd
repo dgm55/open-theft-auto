@@ -166,6 +166,7 @@ var _race_active := false        # the player is currently in a structured race
 var _race_count_shown := -1      # last countdown number announced
 var _owned_spawn = null          # the player's last car spawned onto the lot
 var player_node: Node3D
+var _ragdoll_collision_proxy: Node3D
 var weapon_holder: Node3D       # holds the visible weapon prop in the player's hand
 
 # ---------------- Player state ----------------
@@ -523,6 +524,11 @@ func _on_start() -> void:
 	_city_income = 0.0
 	player_max_armor = 100.0
 	player_armor = 0.0
+	player_node.position = player_pos
+	player_node.rotation.y = player_yaw
+	_walk_vel = Vector2.ZERO
+	_foot_vy = 0.0
+	_stride_phase = 0.0
 	player_hp = player_max_hp
 	for g in my_guards:
 		if is_instance_valid(g.node):
@@ -551,6 +557,10 @@ func _on_start() -> void:
 
 func _die() -> void:
 	GameState.paused = true
+	if in_car == null and suit_state == "none" and not parachuting:
+		_fpv_restore()
+		_create_ragdoll_collision_proxy()
+		Human.start_ragdoll(player_node, Vector3(_walk_vel.x, _foot_vy, _walk_vel.y))
 	# Death drops your LIQUID wealth — every dollar of pocket cash, never
 	# assets (cars, property, suits, stocks and ventures all survive you).
 	# If a rival's security put you down, that tycoon inherits the money and
@@ -573,8 +583,74 @@ func _die() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
+func _create_ragdoll_collision_proxy() -> void:
+	if is_instance_valid(_ragdoll_collision_proxy):
+		_ragdoll_collision_proxy.queue_free()
+	_ragdoll_collision_proxy = Node3D.new()
+	_ragdoll_collision_proxy.name = "DeathRagdollCollisionProxy"
+	add_child(_ragdoll_collision_proxy)
+
+	var collision_layer := Human.RAGDOLL_COLLISION_LAYER
+	var floor_y: float = world.surface_height(player_pos.x, player_pos.z, player_pos.y)
+	if _on_moon_surface():
+		floor_y = world.moon_height(player_pos.x, player_pos.z)
+	var floor_body := StaticBody3D.new()
+	floor_body.collision_layer = collision_layer
+	floor_body.collision_mask = 0
+	floor_body.position = Vector3(player_pos.x, floor_y - 0.06, player_pos.z)
+	var floor_collision := CollisionShape3D.new()
+	var floor_shape := BoxShape3D.new()
+	floor_shape.size = Vector3(12, 0.12, 12)
+	floor_collision.shape = floor_shape
+	floor_body.add_child(floor_collision)
+	_ragdoll_collision_proxy.add_child(floor_body)
+
+	var candidates: Array[Dictionary] = []
+	for collision_data in world.buildings:
+		var width := float(collision_data.get("w", 0.0))
+		var depth := float(collision_data.get("d", 0.0))
+		var center_x := float(collision_data.get("x", 0.0))
+		var center_z := float(collision_data.get("z", 0.0))
+		var dx := maxf(absf(center_x - player_pos.x) - width * 0.5, 0.0)
+		var dz := maxf(absf(center_z - player_pos.z) - depth * 0.5, 0.0)
+		if Vector2(dx, dz).length() <= 8.0 and float(collision_data.get("h", 0.0)) > 0.5:
+			candidates.append(collision_data)
+	candidates.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		var left_offset := Vector2(float(left.x) - player_pos.x, float(left.z) - player_pos.z)
+		var right_offset := Vector2(float(right.x) - player_pos.x, float(right.z) - player_pos.z)
+		return left_offset.length_squared() < right_offset.length_squared()
+	)
+	for i in mini(candidates.size(), 16):
+		var collision_data: Dictionary = candidates[i]
+		var height := float(collision_data.h)
+		var center_x := float(collision_data.x)
+		var center_z := float(collision_data.z)
+		var base_y: float = world.surface_height(center_x, center_z)
+		var body := StaticBody3D.new()
+		body.collision_layer = collision_layer
+		body.collision_mask = 0
+		body.position = Vector3(center_x, base_y + height * 0.5, center_z)
+		body.rotation.y = float(collision_data.get("yaw", 0.0))
+		var collision := CollisionShape3D.new()
+		if collision_data.get("round", false):
+			var cylinder := CylinderShape3D.new()
+			cylinder.radius = float(collision_data.w) * 0.5
+			cylinder.height = height
+			collision.shape = cylinder
+		else:
+			var box := BoxShape3D.new()
+			box.size = Vector3(float(collision_data.w), height, float(collision_data.d))
+			collision.shape = box
+		body.add_child(collision)
+		_ragdoll_collision_proxy.add_child(body)
+
+
 func _respawn() -> void:
 	hud.hide_death()
+	Human.stop_ragdoll(player_node)
+	if is_instance_valid(_ragdoll_collision_proxy):
+		_ragdoll_collision_proxy.queue_free()
+	_ragdoll_collision_proxy = null
 	GameState.paused = false
 	GameState.wanted = 0.0
 	_last_killer = ""
@@ -614,6 +690,11 @@ func _respawn() -> void:
 	else:
 		s = world.find_safe_spawn()
 	player_pos = Vector3(s.x, 0, s.y)
+	player_node.position = player_pos
+	player_node.rotation.y = player_yaw
+	_walk_vel = Vector2.ZERO
+	_foot_vy = 0.0
+	_stride_phase = 0.0
 	player_hp = player_max_hp
 	player_armor = 0.0
 	in_car = null
@@ -1655,7 +1736,7 @@ func _update_on_foot(dt: float) -> void:
 	var mx := _move_x()
 	var mz := _move_z()
 	var l := sqrt(mx * mx + mz * mz)
-	var spd := 6.2 if _sprint_held() else 2.8
+	var spd := 8.0 if _sprint_held() else 4.5
 	var target_vel := Vector2.ZERO
 	if l > 0.0:
 		mx /= l
