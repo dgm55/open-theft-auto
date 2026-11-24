@@ -10,6 +10,8 @@ var _players: Array[AudioStreamPlayer] = []
 var _next: int = 0
 var _ambient_player: AudioStreamPlayer
 var _radio_player: AudioStreamPlayer
+var _menu_music_player: AudioStreamPlayer
+var _menu_pad_player: AudioStreamPlayer
 var _rocket_player: AudioStreamPlayer   # continuous ascent engine loop
 var _wind_player: AudioStreamPlayer     # continuous re-entry wind roar loop
 var _spacecraft_player: AudioStreamPlayer   # continuous spacecraft engine loop
@@ -107,6 +109,17 @@ func _ready() -> void:
 	_radio_player.stream = _melody(
 		[220.0, 277.0, 330.0, 440.0, 392.0, 330.0, 277.0, 220.0], 0.26, "sine", 0.5)
 	_radio_player.volume_db = -13.0
+	_menu_music_player = AudioStreamPlayer.new()
+	add_child(_menu_music_player)
+	_menu_music_player.stream = _melody([
+		220.0, 261.63, 329.63, 392.0, 329.63, 261.63, 246.94, 293.66,
+		349.23, 392.0, 349.23, 293.66, 261.63, 293.66, 329.63, 392.0,
+	], 0.52, "sine", 0.42)
+	_menu_music_player.volume_db = -15.0
+	_menu_pad_player = AudioStreamPlayer.new()
+	add_child(_menu_pad_player)
+	_menu_pad_player.stream = _drone([110.0, 165.0, 220.0], 2.0, 0.24)
+	_menu_pad_player.volume_db = -20.0
 	_rocket_player = AudioStreamPlayer.new()
 	add_child(_rocket_player)
 	_rocket_player.stream = _s_rocket_loop
@@ -757,6 +770,28 @@ func start_ambient() -> void:
 	if not _ambient_player.playing:
 		_ambient_player.play()
 
+
+func stop_ambient() -> void:
+	if _ambient_player != null and _ambient_player.playing:
+		_ambient_player.stop()
+
+
+func start_menu_music() -> void:
+	if _muted:
+		return
+	if _menu_music_player != null and not _menu_music_player.playing:
+		_menu_music_player.play()
+	if _menu_pad_player != null and not _menu_pad_player.playing:
+		_menu_pad_player.play()
+
+
+func stop_menu_music() -> void:
+	if _menu_music_player != null:
+		_menu_music_player.stop()
+	if _menu_pad_player != null:
+		_menu_pad_player.stop()
+
+
 ## Toggle the in-car radio loop.
 func set_radio(on: bool) -> void:
 	if on and not _radio_player.playing:
@@ -770,6 +805,10 @@ func set_muted(v: bool) -> void:
 		_ambient_player.stream_paused = v
 	if _radio_player != null:
 		_radio_player.stream_paused = v
+	if _menu_music_player != null:
+		_menu_music_player.stream_paused = v
+	if _menu_pad_player != null:
+		_menu_pad_player.stream_paused = v
 	if _rocket_player != null:
 		_rocket_player.stream_paused = v
 	if _wind_player != null:

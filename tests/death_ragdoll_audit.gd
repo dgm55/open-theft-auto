@@ -23,7 +23,17 @@ func _run_death_cycle() -> void:
 	await get_tree().process_frame
 	game.set_process(false)
 	SaveGame.set_process(false)
-	var death_position := Vector3(112, 0, 64)
+	var world := game.get("world") as CityWorld
+	_check(world != null, "Death test world did not initialize")
+	if world == null:
+		game.queue_free()
+		get_tree().quit(1)
+		return
+	var spawn := world.find_safe_spawn()
+	var death_position := Vector3(
+		float(spawn.x),
+		world.surface_height(float(spawn.x), float(spawn.y)),
+		float(spawn.y))
 	game.set("player_pos", death_position)
 	var player_node := game.get("player_node") as Node3D
 	player_node.position = death_position

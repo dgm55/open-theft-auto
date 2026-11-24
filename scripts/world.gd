@@ -1,7 +1,50 @@
 class_name CityWorld
 extends Node3D
-## Procedural Free Harbor city — grid roads, buildings, beach, ocean, airport.
-## Mirrors buildCity()/buildAirport()/collidesAt() from the Three.js prototype.
+## GMC-based Manoel Honório world with game-built locations and airport.
+
+const GMC_MAP_SCENE: PackedScene = preload("res://GMC/map.glb")
+const MEDIEVAL_VILLAGE_SCENE: PackedScene = preload("res://scenes/medieval_village.tscn")
+const USE_GMC_MAP := true
+const GMC_MAP_SCALE := 0.42
+# Offset from the local OSM latitude/longitude projection to the GLB exporter origin.
+const GMC_MAP_CENTER := Vector3(1143.42, 0.0, -1986.03)
+const GMC_CENTER_LAT := -21.74517
+const GMC_CENTER_LON := -43.3533975
+const GMC_DRIVABLE_HIGHWAYS := {
+	"primary": true, "primary_link": true, "secondary": true, "tertiary": true,
+	"tertiary_link": true, "residential": true, "living_street": true,
+	"service": true, "trunk": true, "trunk_link": true, "busway": true,
+}
+const GMC_OSM_PATH := "res://GMC/map_expanded.osm"
+const GMC_DEM_PATH := "res://GMC/elevation_srtm.csv"
+const GMC_DEM_SIZE := 45
+const GMC_DEM_FIRST_ROW := 2661
+const GMC_DEM_FIRST_COL := 2306
+# Local datum keeps the SRTM low edge above the game's flat sea plane.
+const GMC_DEM_REFERENCE_ELEVATION := 667.0
+const GMC_DEM_BLEND_MARGIN := 18.0
+const GMC_ROAD_COAST_CLEARANCE := 14.0
+const GMC_BUILDING_WATER_CLEARANCE := 5.0
+const GMC_SIDEWALK_WIDTH := 0.75
+const GMC_LANE_WIDTH_M := 3.2
+const GMC_AVENUE_LANES_EACH_DIRECTION := 3
+const GMC_MEDIAN_WIDTH_M := 2.2
+const GMC_CURB_WIDTH := 0.12
+const GMC_ROAD_SURFACE_LIFT := 0.08
+const GMC_SIDEWALK_STEP := 0.18
+const GMC_MEDIAN_STEP := 0.2
+const GMC_ROAD_MARKING_WIDTH := 0.055
+const GMC_MARKING_DASH_LENGTH := 1.1
+const GMC_MARKING_DASH_GAP := 0.9
+const GMC_TERRAIN_STEP := 8.0
+const GMC_ROAD_GRID_CELL := 24.0
+const GMC_ROAD_TEXTURE_REPEAT_M := 4.0
+const GMC_SIDEWALK_TEXTURE_REPEAT_M := 1.5
+const GROUND_TEXTURE_UV_SCALE := 0.25
+const GMC_INFILL_LIMIT := 1600
+const GMC_BRIDGE_HEIGHT := 1.5
+const GMC_TREE_VARIANTS := 4
+const GMC_TREE_LIMIT := 96
 
 const BLOCK := 32.0                  # wide blocks so the streets are roomy
 const GRID := 13
@@ -23,19 +66,19 @@ const HELIPAD := {"x": 145.0, "z": 267.0}                            # helicopte
 # Causeway corridor linking the city shore to the terminal — a walkable bay crossing.
 const CAUSEWAY := {"x0": 70.0, "x1": 90.0, "z0": 192.0, "z1": 266.0}
 # Stock-exchange kiosk in the dead-centre downtown block — walk up and press E.
-const EXCHANGE := {"x": 0.0, "z": -6.0}
+const EXCHANGE := {"x": 96.0, "z": 120.0}
 # Car dealership kiosk, one block north of the exchange — walk up and press E.
-const DEALERSHIP := {"x": 0.0, "z": 26.0}
+const DEALERSHIP := {"x": 128.0, "z": 120.0}
 # Stark lab kiosk (Iron Man suits), one block west of the exchange.
-const STARK_LAB := {"x": -32.0, "z": -6.0}
+const STARK_LAB := {"x": 64.0, "z": 120.0}
 # Lit pad beside the Stark kiosk — a bought suit is delivered here to step onto.
-const STARK_SUIT_PAD := {"x": -26.0, "z": -6.0}
+const STARK_SUIT_PAD := {"x": 72.0, "z": 120.0}
 # Realtor kiosk (safehouse property), one block east of the exchange.
-const REALTOR := {"x": 32.0, "z": -6.0}
+const REALTOR := {"x": 128.0, "z": 88.0}
 # Hospital donation kiosk, one block southwest of the exchange (beside Stark).
-const HOSPITAL := {"x": -32.0, "z": 26.0}
+const HOSPITAL := {"x": 64.0, "z": 88.0}
 # Angel Ventures HQ entrance, one block southeast of the exchange (beside Realty).
-const VENTURES := {"x": 32.0, "z": 26.0}
+const VENTURES := {"x": 96.0, "z": 88.0}
 
 ## True inside the grass airfield rectangle (runways + overrun + taxiways).
 func on_airfield(x: float, z: float) -> bool:
@@ -52,13 +95,1275 @@ func on_water(x: float, z: float) -> bool:
 		return false
 	if _on_estate(x, z) or _on_estate_causeway(x, z):
 		return false
+	if USE_GMC_MAP:
+		if _gmc_bridge_at(x, z):
+			return false
+		var point := Vector2(x, z)
+		for segment in map_water_segments:
+			var a: Vector2 = segment.from
+			var b: Vector2 = segment.to
+			var ab := b - a
+			var t := clampf((point - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+			if point.distance_to(a + ab * t) <= segment.width * 0.5:
+				return true
 	# The river channel, running the city's length and out into the bay.
-	if absf(x - RIVER_CX) < RIVER_HALF and z > -WORLD_HALF + 2.0 and z < WORLD_HALF + 14.0:
+	if not USE_GMC_MAP and absf(x - RIVER_CX) < RIVER_HALF \
+		and z > -WORLD_HALF + 2.0 \
+		and z < WORLD_HALF + 14.0:
 		return true
 	# Open sea south of the shoreline.
 	if coast_distance(x, z) < 6.0:
 		return true
 	return false
+
+
+func _build_gmc_map() -> void:
+	var map_instance := GMC_MAP_SCENE.instantiate()
+	map_instance.name = "JuizDeForaMap"
+	map_instance.scale = Vector3.ONE * GMC_MAP_SCALE
+	map_instance.position = -GMC_MAP_CENTER * GMC_MAP_SCALE
+	map_instance.position.y = terrain_height(0.0, 0.0)
+	_hide_gmc_source_layers(map_instance)
+	add_child(map_instance)
+
+
+func _hide_gmc_source_layers(node: Node) -> void:
+	for child in node.get_children():
+		if child is GeometryInstance3D and (
+			child.name.begins_with("shp-layer-") or child.name == "osm-building-walls"
+		):
+			child.visible = false
+		_hide_gmc_source_layers(child)
+
+
+func _load_gmc_elevation() -> void:
+	var file := FileAccess.open(GMC_DEM_PATH, FileAccess.READ)
+	if file == null:
+		push_error("Could not open %s: %s" % [GMC_DEM_PATH, error_string(FileAccess.get_open_error())])
+		return
+	_gmc_dem.clear()
+	while not file.eof_reached():
+		var line := file.get_line().strip_edges()
+		if line.is_empty():
+			continue
+		for value in line.split(","):
+			_gmc_dem.append(int(value))
+	file.close()
+	if _gmc_dem.size() != GMC_DEM_SIZE * GMC_DEM_SIZE:
+		push_error("%s must contain a %dx%d elevation grid; got %d values" % [
+			GMC_DEM_PATH, GMC_DEM_SIZE, GMC_DEM_SIZE, _gmc_dem.size(),
+		])
+		_gmc_dem.clear()
+		return
+	var origin_lat := -21.0 - float(GMC_DEM_FIRST_ROW) / 3600.0
+	var origin_lon := -44.0 + float(GMC_DEM_FIRST_COL) / 3600.0
+	_gmc_dem_origin = _gmc_to_world(Vector2(origin_lon, origin_lat))
+	_gmc_dem_step = Vector2(
+		111320.0 * cos(deg_to_rad(GMC_CENTER_LAT)) / 3600.0,
+		111320.0 / 3600.0
+	) * GMC_MAP_SCALE
+
+
+func _load_gmc_map_data() -> void:
+	var parser := XMLParser.new()
+	var error := parser.open(GMC_OSM_PATH)
+	if error != OK:
+		push_error("Could not open %s: %s" % [GMC_OSM_PATH, error_string(error)])
+		return
+
+	var nodes: Dictionary = {}
+	var way: Dictionary = {}
+	var node_id := ""
+	var node_tags: Dictionary = {}
+	while parser.read() == OK:
+		match parser.get_node_type():
+			XMLParser.NODE_ELEMENT:
+				match parser.get_node_name():
+					"node":
+						node_id = parser.get_named_attribute_value("id")
+						node_tags.clear()
+						nodes[node_id] = Vector2(
+							float(parser.get_named_attribute_value("lon")),
+							float(parser.get_named_attribute_value("lat")))
+					"way":
+						way = {"refs": [], "tags": {}}
+						way.id = parser.get_named_attribute_value("id")
+					"nd":
+						if not way.is_empty():
+							way.refs.append(parser.get_named_attribute_value("ref"))
+					"tag":
+						if not way.is_empty():
+							way.tags[parser.get_named_attribute_value("k")] = \
+								parser.get_named_attribute_value("v")
+						elif not node_id.is_empty():
+							node_tags[parser.get_named_attribute_value("k")] = \
+								parser.get_named_attribute_value("v")
+			XMLParser.NODE_ELEMENT_END:
+				match parser.get_node_name():
+					"node":
+						if not node_id.is_empty() and not node_tags.is_empty():
+							_add_gmc_node(nodes[node_id], node_tags)
+						node_id = ""
+						node_tags.clear()
+					"way":
+						if not way.is_empty():
+							_add_gmc_way(way, nodes)
+							way.clear()
+
+	if map_roads.is_empty():
+		push_error("No drivable road segments were found in %s" % GMC_OSM_PATH)
+	_mark_gmc_water_crossings_as_bridges()
+	_index_gmc_roads()
+	_build_gmc_road_mesh()
+	_build_gmc_green_mesh()
+	_build_gmc_water_mesh()
+	_build_gmc_osm_buildings()
+	_build_gmc_midrise_infill()
+	_build_gmc_infill_buildings()
+	_build_gmc_tree_forest()
+
+
+func _add_gmc_node(lat_lon: Vector2, tags: Dictionary) -> void:
+	var name := str(tags.get("name", ""))
+	var is_named_place: bool = tags.has("amenity") or tags.has("shop") \
+		or tags.has("tourism") or tags.has("place") or tags.has("railway")
+	if name.is_empty() or not is_named_place:
+		return
+	var point := _gmc_to_world(lat_lon)
+	if point.length() <= LAND_HALF:
+		_add_gmc_label(name, point, 3.0)
+
+
+func _gmc_to_world(lat_lon: Vector2) -> Vector2:
+	var lon := lat_lon.x
+	var lat := lat_lon.y
+	var meters_per_degree_x := 111320.0 * cos(deg_to_rad(GMC_CENTER_LAT))
+	return Vector2((lon - GMC_CENTER_LON) * meters_per_degree_x,
+		-(lat - GMC_CENTER_LAT) * 111320.0) * GMC_MAP_SCALE
+
+
+func _index_gmc_roads() -> void:
+	_gmc_road_grid.clear()
+	for road_index in map_roads.size():
+		var segment: Dictionary = map_roads[road_index]
+		var a: Vector2 = segment.from
+		var b: Vector2 = segment.to
+		var reach := float(segment.width) * 0.5 + GMC_CURB_WIDTH + GMC_SIDEWALK_WIDTH
+		var min_cell_x := int(floor((minf(a.x, b.x) - reach) / GMC_ROAD_GRID_CELL))
+		var max_cell_x := int(floor((maxf(a.x, b.x) + reach) / GMC_ROAD_GRID_CELL))
+		var min_cell_z := int(floor((minf(a.y, b.y) - reach) / GMC_ROAD_GRID_CELL))
+		var max_cell_z := int(floor((maxf(a.y, b.y) + reach) / GMC_ROAD_GRID_CELL))
+		for cell_x in range(min_cell_x, max_cell_x + 1):
+			for cell_z in range(min_cell_z, max_cell_z + 1):
+				var cell := Vector2i(cell_x, cell_z)
+				if not _gmc_road_grid.has(cell):
+					_gmc_road_grid[cell] = []
+				var bucket: Array = _gmc_road_grid[cell]
+				bucket.append(road_index)
+
+
+func _gmc_road_candidates(x: float, z: float) -> Array:
+	return _gmc_road_grid.get(
+		Vector2i(
+			int(floor(x / GMC_ROAD_GRID_CELL)),
+			int(floor(z / GMC_ROAD_GRID_CELL))
+		),
+		[]
+	)
+
+
+func _add_gmc_way(way: Dictionary, nodes: Dictionary) -> void:
+	var points: Array[Vector2] = []
+	for node_id in way.refs:
+		if not nodes.has(node_id):
+			continue
+		var point: Vector2 = nodes[node_id]
+		points.append(_gmc_to_world(Vector2(point.x, point.y)))
+	if points.is_empty():
+		return
+
+	var tags: Dictionary = way.tags
+	var name := str(tags.get("name", ""))
+	var highway := str(tags.get("highway", ""))
+	var is_green_area: bool = tags.get("leisure", "") in ["park", "garden"] \
+		or tags.get("landuse", "") in ["grass", "forest", "meadow"] \
+		or tags.get("natural", "") == "wood"
+	if is_green_area and points.size() >= 4 \
+			and points[0].is_equal_approx(points[points.size() - 1]):
+		var polygon := PackedVector2Array()
+		for point in points:
+			polygon.append(point)
+		map_green_areas.append(polygon)
+
+	if GMC_DRIVABLE_HIGHWAYS.has(highway):
+		var is_avenue := name.to_lower().contains("avenida")
+		var lanes_each_direction := 1
+		var median_width := 0.0
+		if is_avenue:
+			lanes_each_direction = GMC_AVENUE_LANES_EACH_DIRECTION
+			median_width = GMC_MEDIAN_WIDTH_M * GMC_MAP_SCALE
+		else:
+			var tagged_lanes := int(tags.get("lanes", "0"))
+			var tagged_forward := int(tags.get("lanes:forward", "0"))
+			var tagged_backward := int(tags.get("lanes:backward", "0"))
+			if tagged_forward > 0 or tagged_backward > 0:
+				lanes_each_direction = maxi(1, maxi(tagged_forward, tagged_backward))
+			elif tagged_lanes > 0:
+				lanes_each_direction = maxi(1, int(ceil(float(tagged_lanes) / 2.0)))
+			elif highway in ["primary", "trunk"]:
+				lanes_each_direction = 2
+			lanes_each_direction = mini(lanes_each_direction, 3)
+		var lane_width := GMC_LANE_WIDTH_M * GMC_MAP_SCALE
+		var carriageway_width := float(lanes_each_direction) * lane_width
+		var width := carriageway_width * 2.0 + median_width
+		var road_offset := 0.0
+		for i in range(points.size() - 1):
+			var source_a: Vector2 = points[i]
+			var source_b: Vector2 = points[i + 1]
+			var source_length := source_a.distance_to(source_b)
+			for clipped_segment in _gmc_clip_road_to_land(source_a, source_b, width):
+				var a: Vector2 = clipped_segment[0]
+				var b: Vector2 = clipped_segment[1]
+				map_roads.append({
+					"from": a, "to": b, "width": width, "name": name, "highway": highway,
+					"lanes_each_direction": lanes_each_direction,
+					"lane_width": lane_width, "carriageway_width": carriageway_width,
+					"median_width": median_width, "is_avenue": is_avenue,
+					"way_id": str(way.get("id", "")), "segment_index": i,
+					"marking_offset": road_offset + source_a.distance_to(a),
+					"oneway": false,
+					"bridge": tags.get("bridge", "") in ["yes", "viaduct", "true"],
+				})
+				var left := Vector2(minf(a.x, b.x) - width * 0.5,
+					minf(a.y, b.y) - width * 0.5)
+				var size := Vector2(absf(a.x - b.x) + width,
+					absf(a.y - b.y) + width)
+				road_segments.append(Rect2(left, size))
+			road_offset += source_length
+
+	var is_covered_waterway: bool = tags.get("tunnel", "") in ["culvert", "yes"] \
+		or tags.get("covered", "") in ["yes", "true"]
+	if tags.has("waterway") and not is_covered_waterway:
+		var water_width := maxf(2.0, float(tags.get("width", "4")) * GMC_MAP_SCALE)
+		for i in range(points.size() - 1):
+			if points[i].distance_to(points[i + 1]) < 0.5 \
+				or points[i].length() > LAND_HALF or points[i + 1].length() > LAND_HALF:
+				continue
+			map_water_segments.append({
+				"from": points[i], "to": points[i + 1], "width": water_width,
+				"waterway": str(tags.get("waterway", "")),
+			})
+
+	if tags.has("building") and points.size() >= 3:
+		var min_x := INF
+		var max_x := -INF
+		var min_z := INF
+		var max_z := -INF
+		for point in points:
+			min_x = minf(min_x, point.x)
+			max_x = maxf(max_x, point.x)
+			min_z = minf(min_z, point.y)
+			max_z = maxf(max_z, point.y)
+		var height_m := float(tags.get("height", "0"))
+		if height_m <= 0.0:
+			height_m = float(tags.get("building:levels", "2")) * 3.0
+		var footprint := PackedVector2Array()
+		for point in points:
+			footprint.append(point)
+		var center := Vector2((min_x + max_x) * 0.5, (min_z + max_z) * 0.5)
+		buildings.append({
+			"x": center.x, "z": center.y,
+			"w": maxf(2.0, max_x - min_x), "d": maxf(2.0, max_z - min_z),
+			"h": maxf(2.0, height_m * GMC_MAP_SCALE),
+			"base_y": terrain_height(center.x, center.y), "kind": "gmc_osm_building",
+		})
+		map_building_polygons.append({
+			"footprint": footprint, "h": maxf(2.0, height_m * GMC_MAP_SCALE),
+			"base_y": terrain_height(center.x, center.y),
+		})
+
+	var is_named_place := tags.has("building") or tags.has("leisure") \
+		or tags.has("amenity") or tags.has("shop") or tags.has("tourism")
+	if not name.is_empty() and is_named_place:
+		var center := Vector2.ZERO
+		for point in points:
+			center += point
+		center /= float(points.size())
+		if center.length() <= LAND_HALF:
+			_add_gmc_label(name, center, 2.0)
+
+	if not name.is_empty() and highway in ["primary", "secondary", "trunk"]:
+		var center := Vector2.ZERO
+		for point in points:
+			center += point
+		center /= float(points.size())
+		if center.length() <= LAND_HALF:
+			_add_gmc_label(name, center, 4.0)
+
+
+func _build_gmc_road_mesh() -> void:
+	var asphalt := SurfaceTool.new()
+	var sidewalks := SurfaceTool.new()
+	var curbs := SurfaceTool.new()
+	var medians := SurfaceTool.new()
+	var white_markings := SurfaceTool.new()
+	var yellow_markings := SurfaceTool.new()
+	var guardrails := SurfaceTool.new()
+	asphalt.begin(Mesh.PRIMITIVE_TRIANGLES)
+	sidewalks.begin(Mesh.PRIMITIVE_TRIANGLES)
+	curbs.begin(Mesh.PRIMITIVE_TRIANGLES)
+	medians.begin(Mesh.PRIMITIVE_TRIANGLES)
+	white_markings.begin(Mesh.PRIMITIVE_TRIANGLES)
+	yellow_markings.begin(Mesh.PRIMITIVE_TRIANGLES)
+	guardrails.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var endpoint_counts: Dictionary = {}
+	for segment in map_roads:
+		for point: Vector2 in [segment.from, segment.to]:
+			endpoint_counts[point] = int(endpoint_counts.get(point, 0)) + 1
+	_gmc_road_endpoint_counts = endpoint_counts
+
+	for segment in map_roads:
+		var a: Vector2 = segment.from
+		var b: Vector2 = segment.to
+		var direction := (b - a).normalized()
+		if direction.is_zero_approx():
+			continue
+		var normal := direction.orthogonal()
+		var width: float = segment.width
+		var bridge_lift := GMC_BRIDGE_HEIGHT if segment.get("bridge", false) else 0.0
+		var road_lift := GMC_ROAD_SURFACE_LIFT + bridge_lift
+		var sidewalk_lift := road_lift + GMC_SIDEWALK_STEP
+		var segment_length := a.distance_to(b)
+		var join_extension := minf(width * 0.45, segment_length * 0.24)
+		var start_extension := join_extension if int(endpoint_counts.get(a, 0)) > 1 else 0.0
+		var end_extension := join_extension if int(endpoint_counts.get(b, 0)) > 1 else 0.0
+		var start := a - direction * start_extension
+		var end := b + direction * end_extension
+		var median_width: float = segment.get("median_width", 0.0)
+		var carriageway_width: float = segment.get("carriageway_width", width)
+		var steps := maxi(1, ceili(start.distance_to(end) / 3.0))
+		for i in range(steps):
+			var strip_start := start.lerp(end, float(i) / float(steps))
+			var strip_end := start.lerp(end, float(i + 1) / float(steps))
+			if median_width > 0.0:
+				var carriageway_offset := median_width * 0.5 + carriageway_width * 0.5
+				for side_value in [-1.0, 1.0]:
+					var side := float(side_value)
+					var offset := normal * side * carriageway_offset
+					_append_gmc_ribbon(
+						asphalt, strip_start + offset, strip_end + offset,
+						carriageway_width, road_lift, GMC_ROAD_TEXTURE_REPEAT_M)
+			else:
+				_append_gmc_ribbon(
+					asphalt, strip_start, strip_end, width,
+					road_lift, GMC_ROAD_TEXTURE_REPEAT_M)
+			for side_value in [-1.0, 1.0]:
+				var side := float(side_value)
+				var curb_offset := width * 0.5
+				_append_gmc_curb(
+					curbs, strip_start, strip_end, side, curb_offset,
+					GMC_CURB_WIDTH, road_lift, sidewalk_lift)
+				var sidewalk_offset := curb_offset + GMC_CURB_WIDTH \
+					+ GMC_SIDEWALK_WIDTH * 0.5
+				var offset := normal * side * sidewalk_offset
+				_append_gmc_ribbon(
+					sidewalks, strip_start + offset, strip_end + offset,
+					GMC_SIDEWALK_WIDTH, sidewalk_lift, GMC_SIDEWALK_TEXTURE_REPEAT_M)
+
+		_append_gmc_road_markings(
+			white_markings, yellow_markings, segment, road_lift)
+		_append_gmc_intersection_markings(
+			white_markings, segment, endpoint_counts, road_lift)
+		if median_width > 0.0:
+			var median_clearance := minf(width * 0.42, segment_length * 0.45)
+			var median_start_trim := median_clearance \
+				if int(endpoint_counts.get(a, 0)) >= 3 else 0.0
+			var median_end_trim := median_clearance \
+				if int(endpoint_counts.get(b, 0)) >= 3 else 0.0
+			var median_start := a + direction * median_start_trim
+			var median_end := b - direction * median_end_trim
+			if median_start.distance_to(median_end) > 0.5:
+				var median_lift := road_lift + GMC_MEDIAN_STEP
+				var planting_width := maxf(0.1, median_width - GMC_CURB_WIDTH * 2.0)
+				_append_gmc_ribbon(
+					medians, median_start, median_end, planting_width,
+					median_lift, GMC_ROAD_TEXTURE_REPEAT_M)
+				for side_value in [-1.0, 1.0]:
+					_append_gmc_curb(
+						curbs, median_start, median_end, float(side_value),
+						median_width * 0.5, GMC_CURB_WIDTH, road_lift,
+						median_lift, true)
+		if segment.get("bridge", false):
+			for side_value in [-1.0, 1.0]:
+				_append_gmc_guardrail(
+					guardrails, start, end, float(side_value),
+					width * 0.5 + GMC_CURB_WIDTH + GMC_SIDEWALK_WIDTH,
+					road_lift)
+
+	var road := MeshInstance3D.new()
+	road.name = "GMC OSM road surfaces"
+	road.mesh = asphalt.commit()
+	var road_material := _road_mat.duplicate() as StandardMaterial3D
+	road_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	road.material_override = road_material
+	road.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	road.set_meta("gmc_terrain_aligned", true)
+	add_child(road)
+
+	var footpaths := MeshInstance3D.new()
+	footpaths.name = "GMC OSM sidewalks"
+	footpaths.mesh = sidewalks.commit()
+	var sidewalk_material := _sidewalk_mat.duplicate() as StandardMaterial3D
+	sidewalk_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	footpaths.material_override = sidewalk_material
+	footpaths.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	footpaths.set_meta("gmc_terrain_aligned", true)
+	add_child(footpaths)
+
+	var curb_mesh := MeshInstance3D.new()
+	curb_mesh.name = "GMC OSM curbs"
+	curb_mesh.mesh = curbs.commit()
+	curb_mesh.material_override = Build.mat(Build.hex(0xbab9af), 0.88)
+	curb_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	curb_mesh.set_meta("gmc_terrain_aligned", true)
+	add_child(curb_mesh)
+
+	var median_mesh := MeshInstance3D.new()
+	median_mesh.name = "GMC OSM planted medians"
+	median_mesh.mesh = medians.commit()
+	median_mesh.material_override = Build.ground()
+	median_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	median_mesh.set_meta("gmc_terrain_aligned", true)
+	add_child(median_mesh)
+
+	_add_gmc_marking_mesh("GMC OSM lane markings", white_markings, Color("eeeadd"))
+	_add_gmc_marking_mesh("GMC OSM centre lines", yellow_markings, Color("eacb37"))
+
+	var rail_mesh := MeshInstance3D.new()
+	rail_mesh.name = "GMC OSM bridge guardrails"
+	rail_mesh.mesh = guardrails.commit()
+	rail_mesh.material_override = Build.mat(Build.hex(0x687275), 0.48, 0.55)
+	rail_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	rail_mesh.set_meta("gmc_terrain_aligned", true)
+	add_child(rail_mesh)
+
+
+func _add_gmc_marking_mesh(
+	node_name: String, st: SurfaceTool, color: Color
+) -> void:
+	var markings := MeshInstance3D.new()
+	markings.name = node_name
+	markings.mesh = st.commit()
+	var material := Build.mat(color, 0.9)
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	markings.material_override = material
+	markings.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	markings.set_meta("gmc_terrain_aligned", true)
+	add_child(markings)
+
+
+func _append_gmc_road_markings(
+	white: SurfaceTool,
+	yellow: SurfaceTool,
+	segment: Dictionary,
+	road_lift: float
+) -> void:
+	var a: Vector2 = segment.from
+	var b: Vector2 = segment.to
+	var direction := (b - a).normalized()
+	if direction.is_zero_approx():
+		return
+	var normal := direction.orthogonal()
+	var lane_width: float = segment.lane_width
+	var lanes_each_direction: int = segment.lanes_each_direction
+	var median_width: float = segment.median_width
+	var marking_lift := road_lift + 0.018
+	var phase := float(segment.get("marking_offset", 0.0))
+	if median_width > 0.0:
+		var carriageway_width: float = segment.carriageway_width
+		var carriageway_offset := median_width * 0.5 + carriageway_width * 0.5
+		for side_value in [-1.0, 1.0]:
+			var side := float(side_value)
+			for lane_index in range(1, lanes_each_direction):
+				var lateral := side * (median_width * 0.5 + lane_width * lane_index)
+				_append_gmc_dashed_line(
+					white, a + normal * lateral, b + normal * lateral,
+					GMC_ROAD_MARKING_WIDTH, marking_lift, phase)
+			var edge_offset := side * (
+				median_width * 0.5 + carriageway_width - GMC_ROAD_MARKING_WIDTH)
+			_append_gmc_ribbon(
+				white, a + normal * edge_offset, b + normal * edge_offset,
+				GMC_ROAD_MARKING_WIDTH, marking_lift)
+	else:
+		var line_gap := GMC_ROAD_MARKING_WIDTH * 1.8
+		for side_value in [-1.0, 1.0]:
+			var side := float(side_value)
+			_append_gmc_dashed_line(
+				yellow, a + normal * side * line_gap,
+				b + normal * side * line_gap, GMC_ROAD_MARKING_WIDTH,
+				marking_lift, phase)
+			for lane_index in range(1, lanes_each_direction):
+				var lateral := side * lane_width * lane_index
+				_append_gmc_dashed_line(
+					white, a + normal * lateral, b + normal * lateral,
+					GMC_ROAD_MARKING_WIDTH, marking_lift, phase)
+
+
+func _append_gmc_dashed_line(
+	st: SurfaceTool,
+	a: Vector2,
+	b: Vector2,
+	width: float,
+	lift: float,
+	phase: float
+) -> void:
+	var length := a.distance_to(b)
+	if length <= 0.01:
+		return
+	var period := GMC_MARKING_DASH_LENGTH + GMC_MARKING_DASH_GAP
+	var dash_start := floor(phase / period) * period
+	while dash_start < phase + length:
+		var local_start := maxf(0.0, dash_start - phase)
+		var local_end := minf(length, dash_start + GMC_MARKING_DASH_LENGTH - phase)
+		if local_end > local_start:
+			_append_gmc_ribbon(
+				st, a.lerp(b, local_start / length), a.lerp(b, local_end / length),
+				width, lift)
+		dash_start += period
+
+
+func _append_gmc_intersection_markings(
+	st: SurfaceTool,
+	segment: Dictionary,
+	endpoint_counts: Dictionary,
+	road_lift: float
+) -> void:
+	var a: Vector2 = segment.from
+	var b: Vector2 = segment.to
+	var direction := (b - a).normalized()
+	var length := a.distance_to(b)
+	if direction.is_zero_approx() or length < 4.0:
+		return
+	var width: float = segment.width
+	var median_width: float = segment.median_width
+	var carriageway_width: float = segment.carriageway_width
+	for endpoint in [a, b]:
+		if int(endpoint_counts.get(endpoint, 0)) < 3:
+			continue
+		var away := direction if endpoint == a else -direction
+		var center := endpoint + away * minf(width * 0.5 + 0.4, length * 0.3)
+		var across := away.orthogonal()
+		var spans: Array[Vector2] = []
+		if median_width > 0.0:
+			var offset := median_width * 0.5 + carriageway_width * 0.5
+			for side_value in [-1.0, 1.0]:
+				var side := float(side_value)
+				spans.append(Vector2(
+					side * offset - carriageway_width * 0.5,
+					side * offset + carriageway_width * 0.5
+				))
+		else:
+			spans.append(Vector2(-width * 0.5, width * 0.5))
+		for span in spans:
+			for stripe_index in range(5):
+				var stripe_center := center + away * (float(stripe_index) - 2.0) * 0.27
+				var stripe_start := stripe_center + across * span.x
+				var stripe_end := stripe_center + across * span.y
+				_append_gmc_ribbon(
+					st, stripe_start, stripe_end, 0.13,
+					road_lift + 0.02)
+
+
+func _append_gmc_curb(
+	st: SurfaceTool,
+	a: Vector2,
+	b: Vector2,
+	side_sign: float,
+	boundary_offset: float,
+	curb_width: float,
+	base_lift: float,
+	top_lift: float,
+	inward := false
+) -> void:
+	var direction := (b - a).normalized()
+	if direction.is_zero_approx():
+		return
+	var outward := direction.orthogonal() * side_sign
+	var other_offset := boundary_offset + curb_width
+	if inward:
+		other_offset = boundary_offset - curb_width
+	var steps := maxi(1, ceili(a.distance_to(b) / 3.0))
+	for i in range(steps):
+		var start := a.lerp(b, float(i) / float(steps))
+		var end := a.lerp(b, float(i + 1) / float(steps))
+		var inner_start := start + outward * boundary_offset
+		var inner_end := end + outward * boundary_offset
+		var outer_start := start + outward * other_offset
+		var outer_end := end + outward * other_offset
+		var base_start_y := _gmc_ground_surface_height(inner_start.x, inner_start.y) + base_lift
+		var base_end_y := _gmc_ground_surface_height(inner_end.x, inner_end.y) + base_lift
+		var top_inner_start := Vector3(
+			inner_start.x, _gmc_ground_surface_height(inner_start.x, inner_start.y) + top_lift,
+			inner_start.y)
+		var top_inner_end := Vector3(
+			inner_end.x, _gmc_ground_surface_height(inner_end.x, inner_end.y) + top_lift,
+			inner_end.y)
+		var top_outer_start := Vector3(
+			outer_start.x, _gmc_ground_surface_height(outer_start.x, outer_start.y) + top_lift,
+			outer_start.y)
+		var top_outer_end := Vector3(
+			outer_end.x, _gmc_ground_surface_height(outer_end.x, outer_end.y) + top_lift,
+			outer_end.y)
+		var base_start := Vector3(inner_start.x, base_start_y, inner_start.y)
+		var base_end := Vector3(inner_end.x, base_end_y, inner_end.y)
+		for point in [base_start, base_end, top_inner_end, base_start, top_inner_end, top_inner_start]:
+			st.set_normal(outward)
+			st.add_vertex(point)
+		for point in [top_inner_start, top_outer_start, top_outer_end,
+				top_inner_start, top_outer_end, top_inner_end]:
+			st.set_normal(Vector3.UP)
+			st.add_vertex(point)
+
+
+func _append_gmc_guardrail(
+	st: SurfaceTool,
+	a: Vector2,
+	b: Vector2,
+	side_sign: float,
+	offset: float,
+	road_lift: float
+) -> void:
+	var direction := (b - a).normalized()
+	if direction.is_zero_approx():
+		return
+	var normal := direction.orthogonal() * side_sign
+	var start := a + normal * offset
+	var end := b + normal * offset
+	var length := start.distance_to(end)
+	var steps := maxi(1, ceili(length / 3.0))
+	for i in range(steps):
+		var p0 := start.lerp(end, float(i) / float(steps))
+		var p1 := start.lerp(end, float(i + 1) / float(steps))
+		var side := direction.orthogonal() * side_sign
+		for height in [0.5, 0.95]:
+			var bottom0 := Vector3(
+				p0.x, _gmc_ground_surface_height(p0.x, p0.y) + road_lift + height, p0.y)
+			var bottom1 := Vector3(
+				p1.x, _gmc_ground_surface_height(p1.x, p1.y) + road_lift + height, p1.y)
+			var top0 := bottom0 + Vector3(0, 0.12, 0)
+			var top1 := bottom1 + Vector3(0, 0.12, 0)
+			for point in [bottom0, bottom1, top1, bottom0, top1, top0]:
+				st.set_normal(side)
+				st.add_vertex(point)
+		if i % 2 == 0:
+			var post_center := (p0 + p1) * 0.5
+			var post_bottom := Vector3(
+				post_center.x,
+				_gmc_ground_surface_height(post_center.x, post_center.y) + road_lift + 0.1,
+				post_center.y)
+			var post_top := post_bottom + Vector3(0, 1.05, 0)
+			for point in [
+				post_bottom, post_top, post_top + Vector3(normal.x * 0.09, 0, normal.y * 0.09),
+				post_bottom, post_top + Vector3(normal.x * 0.09, 0, normal.y * 0.09),
+				post_bottom + Vector3(normal.x * 0.09, 0, normal.y * 0.09),
+			]:
+				st.set_normal(side)
+				st.add_vertex(point)
+
+
+func _gmc_clip_road_to_land(
+	a: Vector2,
+	b: Vector2,
+	road_width: float
+) -> Array[PackedVector2Array]:
+	var clipped: Array[PackedVector2Array] = []
+	var length := a.distance_to(b)
+	if length < 1.0:
+		return clipped
+	var clearance := GMC_ROAD_COAST_CLEARANCE + road_width * 0.5 + GMC_SIDEWALK_WIDTH
+	var sample_count := maxi(1, ceili(length / 8.0))
+	var previous := a
+	var previous_is_land := coast_distance(a.x, a.y) >= clearance
+	var land_run_start := a if previous_is_land else Vector2.ZERO
+	for sample_index in range(1, sample_count + 1):
+		var current := a.lerp(b, float(sample_index) / float(sample_count))
+		var current_is_land := coast_distance(current.x, current.y) >= clearance
+		if current_is_land != previous_is_land:
+			var boundary := _gmc_find_coast_boundary(
+				previous, current, clearance, previous_is_land)
+			if previous_is_land:
+				if land_run_start.distance_to(boundary) >= 1.0:
+					clipped.append(PackedVector2Array([land_run_start, boundary]))
+				land_run_start = Vector2.ZERO
+			else:
+				land_run_start = boundary
+		previous = current
+		previous_is_land = current_is_land
+	if previous_is_land and land_run_start.distance_to(b) >= 1.0:
+		clipped.append(PackedVector2Array([land_run_start, b]))
+	return clipped
+
+
+func _gmc_find_coast_boundary(
+	a: Vector2,
+	b: Vector2,
+	clearance: float,
+	a_is_land: bool
+) -> Vector2:
+	var land_point := a if a_is_land else b
+	var water_point := b if a_is_land else a
+	for _iteration in 14:
+		var midpoint := (land_point + water_point) * 0.5
+		if coast_distance(midpoint.x, midpoint.y) >= clearance:
+			land_point = midpoint
+		else:
+			water_point = midpoint
+	return land_point
+
+
+func _append_gmc_ribbon(st: SurfaceTool, a: Vector2, b: Vector2,
+		width: float, lift: float, texture_repeat_m: float = 0.0) -> void:
+	var direction := (b - a).normalized()
+	if direction.is_zero_approx() or width <= 0.0:
+		return
+	var side := direction.orthogonal() * (width * 0.5)
+	var left_a := a + side
+	var right_a := a - side
+	var left_b := b + side
+	var right_b := b - side
+	var vertices := PackedVector2Array([
+		left_a, right_a, right_b, left_a, right_b, left_b,
+	])
+	var uv_axis := direction.orthogonal()
+	for point in vertices:
+		if texture_repeat_m > 0.0:
+			st.set_uv(Vector2(point.dot(direction), point.dot(uv_axis)) / texture_repeat_m)
+		st.set_normal(Vector3.UP)
+		st.add_vertex(Vector3(point.x, terrain_height(point.x, point.y) + lift, point.y))
+
+
+func _mark_gmc_water_crossings_as_bridges() -> void:
+	gmc_bridge_count = 0
+	for road in map_roads:
+		if not road.get("bridge", false):
+			for water in map_water_segments:
+				if _gmc_segments_cross(road.from, road.to, water.from, water.to):
+					road.bridge = true
+					break
+		if road.get("bridge", false):
+			gmc_bridge_count += 1
+
+
+func _gmc_segments_cross(a: Vector2, b: Vector2, c: Vector2, d: Vector2) -> bool:
+	var road_direction := b - a
+	var water_direction := d - c
+	var denominator := road_direction.cross(water_direction)
+	if absf(denominator) < 0.000001:
+		return false
+	var offset := c - a
+	var road_t := offset.cross(water_direction) / denominator
+	var water_t := offset.cross(road_direction) / denominator
+	return road_t >= 0.0 and road_t <= 1.0 and water_t >= 0.0 and water_t <= 1.0
+
+
+func _gmc_bridge_at(x: float, z: float) -> bool:
+	var point := Vector2(x, z)
+	for segment_index in _gmc_road_candidates(x, z):
+		var segment: Dictionary = map_roads[int(segment_index)]
+		if not segment.get("bridge", false):
+			continue
+		var a: Vector2 = segment.from
+		var b: Vector2 = segment.to
+		var direction := b - a
+		if direction.length_squared() <= 0.0:
+			continue
+		var t := clampf((point - a).dot(direction) / direction.length_squared(), 0.0, 1.0)
+		if point.distance_to(a + direction * t) \
+				<= float(segment.width) * 0.5 + GMC_CURB_WIDTH + GMC_SIDEWALK_WIDTH:
+			return true
+	return false
+
+
+func _build_gmc_green_mesh() -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for area in map_green_areas:
+		var polygon := PackedVector2Array()
+		var point_count := area.size()
+		if point_count > 1 and area[0].is_equal_approx(area[point_count - 1]):
+			point_count -= 1
+		for i in point_count:
+			polygon.append(area[i])
+		var triangles := Geometry2D.triangulate_polygon(polygon)
+		for i in range(0, triangles.size(), 3):
+			for vertex_index in [triangles[i], triangles[i + 1], triangles[i + 2]]:
+				var point: Vector2 = polygon[vertex_index]
+				st.set_color(Build.hex(0x8eaa6b))
+				st.set_normal(Vector3.UP)
+				st.set_uv(point * GROUND_TEXTURE_UV_SCALE)
+				st.add_vertex(Vector3(point.x, terrain_height(point.x, point.y) + 0.08, point.y))
+	var park_mesh := MeshInstance3D.new()
+	park_mesh.name = "GMC OSM green spaces"
+	park_mesh.mesh = st.commit()
+	park_mesh.material_override = Build.ground()
+	park_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	park_mesh.set_meta("gmc_terrain_aligned", true)
+	add_child(park_mesh)
+
+
+func _build_gmc_water_mesh() -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for segment in map_water_segments:
+		var a: Vector2 = segment.from
+		var b: Vector2 = segment.to
+		var length := a.distance_to(b)
+		var width: float = minf(float(segment.width), 20.0)
+		var steps := maxi(1, ceili(length / 8.0))
+		for i in steps:
+			var start := a.lerp(b, float(i) / float(steps))
+			var end := a.lerp(b, float(i + 1) / float(steps))
+			_append_gmc_ribbon(st, start, end, width, 0.2)
+	var water := MeshInstance3D.new()
+	water.name = "GMC OSM waterways"
+	water.mesh = st.commit()
+	var water_material: StandardMaterial3D = Build.mat(Build.hex(0x527f91), 0.28, 0.12)
+	water_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	water.material_override = water_material
+	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	water.set_meta("gmc_terrain_aligned", true)
+	add_child(water)
+
+
+func _build_gmc_osm_buildings() -> void:
+	var palette := [
+		Color("d8c6ae"), Color("cbb79f"), Color("e0d6c6"),
+		Color("b9b4a9"), Color("d4c9b8"),
+	]
+	for index in map_building_polygons.size():
+		var building: Dictionary = map_building_polygons[index]
+		var footprint: PackedVector2Array = building.footprint
+		var point_count := footprint.size()
+		if point_count > 1 and footprint[0].is_equal_approx(footprint[point_count - 1]):
+			point_count -= 1
+		if point_count < 3:
+			continue
+		var polygon := PackedVector2Array()
+		for i in point_count:
+			polygon.append(footprint[i])
+		var height: float = building.h
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for i in point_count:
+			var a: Vector2 = polygon[i]
+			var b: Vector2 = polygon[(i + 1) % point_count]
+			var ground_a := terrain_height(a.x, a.y)
+			var ground_b := terrain_height(b.x, b.y)
+			var bottom_a := Vector3(a.x, ground_a, a.y)
+			var bottom_b := Vector3(b.x, ground_b, b.y)
+			var top_a := Vector3(a.x, ground_a + height, a.y)
+			var top_b := Vector3(b.x, ground_b + height, b.y)
+			_append_gmc_triangle(st, bottom_a, bottom_b, top_b)
+			_append_gmc_triangle(st, bottom_a, top_b, top_a)
+		var triangles := Geometry2D.triangulate_polygon(polygon)
+		for i in range(0, triangles.size(), 3):
+			var a: Vector2 = polygon[triangles[i]]
+			var b: Vector2 = polygon[triangles[i + 1]]
+			var c: Vector2 = polygon[triangles[i + 2]]
+			_append_gmc_triangle(st,
+				Vector3(a.x, terrain_height(a.x, a.y) + height, a.y),
+				Vector3(b.x, terrain_height(b.x, b.y) + height, b.y),
+				Vector3(c.x, terrain_height(c.x, c.y) + height, c.y),
+				Vector3.UP)
+		var style := "brick" if index % 4 == 1 else "stucco"
+		var material := Build.facade(palette[index % palette.size()], style) \
+			as StandardMaterial3D
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		var instance := MeshInstance3D.new()
+		instance.name = "GMC OSM building %03d" % index
+		instance.mesh = st.commit()
+		instance.material_override = material
+		instance.set_meta("gmc_terrain_aligned", true)
+		add_child(instance)
+
+
+func _append_gmc_triangle(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3,
+		normal: Vector3 = Vector3.ZERO) -> void:
+	var face_normal := normal
+	if face_normal.is_zero_approx():
+		face_normal = (b - a).cross(c - a).normalized()
+	for point in [a, b, c]:
+		st.set_normal(face_normal)
+		st.add_vertex(point)
+
+
+func _build_gmc_infill_buildings() -> void:
+	var body_colors := [0xe8ddc8, 0xd7c3a9, 0xcbb9a5, 0xe4d2b8, 0xd5d4cb, 0xbfb8a7]
+	var roof_colors := [0x6a5548, 0x786355, 0x545754, 0x8b6d59, 0x5c5b56, 0x71604f]
+	var body_transforms: Array = []
+	var roof_transforms: Array = []
+	for _variant in body_colors.size():
+		body_transforms.append([])
+		roof_transforms.append([])
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20261125
+	for segment in _gmc_shuffled_roads(rng):
+		if gmc_infill_count >= GMC_INFILL_LIMIT:
+			break
+		if not str(segment.highway) in [
+			"residential", "living_street", "service", "tertiary", "tertiary_link",
+		]:
+			continue
+		var a: Vector2 = segment.from
+		var b: Vector2 = segment.to
+		var direction := (b - a).normalized()
+		var length := a.distance_to(b)
+		if length < 4.0 or direction.is_zero_approx():
+			continue
+		var normal := direction.orthogonal()
+		var spacing := rng.randf_range(5.5, 8.5)
+		var along := rng.randf_range(0.5, spacing)
+		while along < length and gmc_infill_count < GMC_INFILL_LIMIT:
+			var road_point := a.lerp(b, along / length)
+			for side_value in [-1.0, 1.0]:
+				if gmc_infill_count >= GMC_INFILL_LIMIT:
+					break
+				var side := float(side_value)
+				var width := rng.randf_range(2.6, 4.8)
+				var depth := rng.randf_range(2.8, 4.4)
+				var offset := float(segment.width) * 0.5 + 1.1 + depth * 0.5
+				var point: Vector2 = road_point + normal * side * offset
+				if on_water(point.x, point.y) \
+					or absf(point.x) > LAND_HALF or absf(point.y) > LAND_HALF:
+					continue
+				if not _gmc_building_clear_of_water(point, width, depth):
+					continue
+				if _gmc_tree_near_road(point, depth * 0.5 + 0.25):
+					continue
+				var base_y := terrain_height(point.x, point.y)
+				if absf(base_y - terrain_height(road_point.x, road_point.y)) > 2.2:
+					continue
+				if not _gmc_infill_site_clear(point, width, depth):
+					continue
+
+				var height := rng.randf_range(2.4, 4.6)
+				var variant := rng.randi_range(0, body_colors.size() - 1)
+				var frontage: Vector2 = -normal * side
+				var yaw := atan2(frontage.x, frontage.y)
+				var basis := Basis(Vector3.UP, yaw)
+				body_transforms[variant].append(Transform3D(
+					basis.scaled(Vector3(width, height, depth)),
+					Vector3(point.x, base_y + height * 0.5, point.y)))
+				roof_transforms[variant].append(Transform3D(
+					basis.scaled(Vector3(width + 0.2, 0.16, depth + 0.2)),
+					Vector3(point.x, base_y + height + 0.08, point.y)))
+				buildings.append({
+					"x": point.x, "z": point.y, "w": width, "d": depth,
+					"h": height + 0.25, "yaw": yaw, "base_y": base_y,
+					"kind": "gmc_infill_house",
+				})
+				gmc_infill_count += 1
+			along += spacing
+
+	for variant in body_colors.size():
+		for is_roof in [false, true]:
+			var transforms: Array = roof_transforms[variant] if is_roof \
+				else body_transforms[variant]
+			if transforms.is_empty():
+				continue
+			var mesh := BoxMesh.new()
+			mesh.material = Build.roof_tiles(Build.hex(roof_colors[variant])) if is_roof \
+				else Build.facade(
+					Build.hex(body_colors[variant]),
+					"brick" if variant % 2 == 1 else "stucco")
+			var multimesh := MultiMesh.new()
+			multimesh.transform_format = MultiMesh.TRANSFORM_3D
+			multimesh.mesh = mesh
+			multimesh.instance_count = transforms.size()
+			for i in transforms.size():
+				multimesh.set_instance_transform(i, transforms[i])
+			var instance := MultiMeshInstance3D.new()
+			instance.name = "GMC inferred house roofs %d" % variant if is_roof \
+				else "GMC inferred house walls %d" % variant
+			instance.multimesh = multimesh
+			instance.set_meta("gmc_terrain_aligned", true)
+			add_child(instance)
+
+
+func _build_gmc_midrise_infill() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20261126
+	var colors := [Color("c7b9a5"), Color("d4cbbd"), Color("aeb2b0"), Color("d9cdb9")]
+	for segment in _gmc_shuffled_roads(rng):
+		if gmc_midrise_count >= 70:
+			break
+		if not str(segment.highway) in ["primary", "secondary"]:
+			continue
+		var a: Vector2 = segment.from
+		var b: Vector2 = segment.to
+		var direction := (b - a).normalized()
+		var length := a.distance_to(b)
+		if length < 8.0 or direction.is_zero_approx():
+			continue
+		var normal := direction.orthogonal()
+		var spacing := rng.randf_range(13.0, 20.0)
+		var along := rng.randf_range(1.0, spacing)
+		while along < length and gmc_midrise_count < 70:
+			var road_point := a.lerp(b, along / length)
+			for side_value in [-1.0, 1.0]:
+				if gmc_midrise_count >= 70:
+					break
+				var side := float(side_value)
+				var width := rng.randf_range(6.5, 10.0)
+				var depth := rng.randf_range(4.5, 7.0)
+				var offset := float(segment.width) * 0.5 + 1.35 + depth * 0.5
+				var point: Vector2 = road_point + normal * side * offset
+				if on_water(point.x, point.y) \
+					or _gmc_tree_near_road(point, depth * 0.5 + 0.3):
+					continue
+				if not _gmc_building_clear_of_water(point, width, depth):
+					continue
+				var base_y := terrain_height(point.x, point.y)
+				if absf(base_y - terrain_height(road_point.x, road_point.y)) > 2.2 \
+					or not _gmc_infill_site_clear(point, width, depth):
+					continue
+				var height := rng.randf_range(4.0, 7.0)
+				var style := rng.randi_range(1, 2)
+				var color: Color = colors[rng.randi_range(0, colors.size() - 1)]
+				architecture.building(
+					point.x, point.y, width, depth, height, style, color, base_y)
+				buildings.append({
+					"x": point.x, "z": point.y, "w": width, "d": depth,
+					"h": height + 2.0, "base_y": base_y,
+					"kind": "gmc_midrise",
+				})
+				gmc_midrise_count += 1
+			along += spacing
+
+
+func _gmc_infill_site_clear(point: Vector2, width: float, depth: float) -> bool:
+	for building in buildings:
+		var existing_w: float = building.w
+		var existing_d: float = building.d
+		var yaw := absf(float(building.get("yaw", 0.0)))
+		if yaw > 0.001:
+			var cos_yaw := absf(cos(yaw))
+			var sin_yaw := absf(sin(yaw))
+			var rotated_w := existing_w * cos_yaw + existing_d * sin_yaw
+			existing_d = existing_w * sin_yaw + existing_d * cos_yaw
+			existing_w = rotated_w
+		if absf(point.x - float(building.x)) < (width + existing_w) * 0.5 + 0.35 \
+			and absf(point.y - float(building.z)) < (depth + existing_d) * 0.5 + 0.35:
+			return false
+	return true
+
+
+func _gmc_building_clear_of_water(point: Vector2, width: float, depth: float) -> bool:
+	var footprint_radius := Vector2(width, depth).length() * 0.5
+	for segment in map_water_segments:
+		var a: Vector2 = segment.from
+		var b: Vector2 = segment.to
+		var direction := b - a
+		if direction.length_squared() <= 0.0:
+			continue
+		var t := clampf((point - a).dot(direction) / direction.length_squared(), 0.0, 1.0)
+		var nearest := a + direction * t
+		var clearance := footprint_radius + float(segment.width) * 0.5 \
+			+ GMC_BUILDING_WATER_CLEARANCE
+		if point.distance_to(nearest) < clearance:
+			return false
+	return true
+
+
+func _gmc_shuffled_roads(rng: RandomNumberGenerator) -> Array:
+	var roads: Array = map_roads.duplicate()
+	for i in range(roads.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var segment: Dictionary = roads[i]
+		roads[i] = roads[j]
+		roads[j] = segment
+	return roads
+
+
+func _build_gmc_tree_forest() -> void:
+	if map_green_areas.is_empty():
+		push_warning("No closed OSM green-space polygons were found for EZTree placement")
+		return
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20261124
+	var positions_by_variant: Array = []
+	var tree_collision_records: Array[Dictionary] = []
+	for variant in GMC_TREE_VARIANTS:
+		positions_by_variant.append([])
+
+	const GRID_SPACING := 7.5
+	const MIN_TREE_SPACING := 5.2
+	for polygon in map_green_areas:
+		var min_x := INF
+		var max_x := -INF
+		var min_z := INF
+		var max_z := -INF
+		for point in polygon:
+			min_x = minf(min_x, point.x)
+			max_x = maxf(max_x, point.x)
+			min_z = minf(min_z, point.y)
+			max_z = maxf(max_z, point.y)
+
+		var x := ceilf(min_x / GRID_SPACING) * GRID_SPACING
+		while x <= max_x and map_tree_positions.size() < GMC_TREE_LIMIT:
+			var z := ceilf(min_z / GRID_SPACING) * GRID_SPACING
+			while z <= max_z and map_tree_positions.size() < GMC_TREE_LIMIT:
+				var candidate := Vector2(
+					x + rng.randf_range(-1.3, 1.3),
+					z + rng.randf_range(-1.3, 1.3))
+				z += GRID_SPACING
+				if not Geometry2D.is_point_in_polygon(candidate, polygon):
+					continue
+				if _gmc_tree_near_road(candidate, 2.5):
+					continue
+				if on_water(candidate.x, candidate.y):
+					continue
+				var height := terrain_height(candidate.x, candidate.y)
+				if collides_at(candidate.x, candidate.y, 1.2, height):
+					continue
+				var too_close := false
+				for placed in map_tree_positions:
+					if candidate.distance_to(placed) < MIN_TREE_SPACING:
+						too_close = true
+						break
+				if too_close:
+					continue
+
+				var variant := rng.randi_range(0, GMC_TREE_VARIANTS - 1)
+				var scale := rng.randf_range(0.38, 0.55)
+				var basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU)) \
+					.scaled(Vector3.ONE * scale)
+				positions_by_variant[variant].append(
+					Transform3D(basis, Vector3(candidate.x, height, candidate.y)))
+				map_tree_positions.append(candidate)
+				tree_collision_records.append({
+					"x": candidate.x, "z": candidate.y,
+					"w": 0.8, "d": 0.8, "h": scale * 11.0,
+					"base_y": height, "round": true, "kind": "gmc_tree",
+				})
+			x += GRID_SPACING
+
+	if map_tree_positions.is_empty():
+		return
+	buildings.append_array(tree_collision_records)
+
+	var tree_meshes: Array[Mesh] = []
+	for variant in GMC_TREE_VARIANTS:
+		var tree := EZTree.new()
+		tree.rng_seed = 1143 + variant * 7919
+		tree.branch_levels = 2
+		tree.leaf_count = 12
+		tree.leaf_size = 0.72
+		tree.wind_strength = Vector3(0.06, 0.0, 0.06)
+		tree.generate()
+		tree_meshes.append(tree.get_tree_mesh())
+		tree.free()
+
+	for variant in GMC_TREE_VARIANTS:
+		var transforms: Array = positions_by_variant[variant]
+		if transforms.is_empty():
+			continue
+		var multimesh := MultiMesh.new()
+		multimesh.transform_format = MultiMesh.TRANSFORM_3D
+		multimesh.mesh = tree_meshes[variant]
+		multimesh.instance_count = transforms.size()
+		for i in transforms.size():
+			multimesh.set_instance_transform(i, transforms[i])
+		var forest := MultiMeshInstance3D.new()
+		forest.name = "GMC park trees %02d" % variant
+		forest.multimesh = multimesh
+		add_child(forest)
+
+
+func _gmc_tree_near_road(point: Vector2, margin: float) -> bool:
+	for segment in map_roads:
+		var a: Vector2 = segment.from
+		var b: Vector2 = segment.to
+		var ab := b - a
+		var length_squared := ab.length_squared()
+		if length_squared <= 0.0:
+			continue
+		var t := clampf((point - a).dot(ab) / length_squared, 0.0, 1.0)
+		var clearance: float = float(segment.width) * 0.5 + margin
+		if point.distance_to(a + ab * t) < clearance:
+			return true
+	return false
+
+
+func _add_gmc_label(text: String, point: Vector2, height: float) -> void:
+	if _gmc_labeled_names.has(text):
+		return
+	_gmc_labeled_names[text] = true
+	var label := Label3D.new()
+	label.text = text
+	label.font_size = 28
+	label.pixel_size = 0.008
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.modulate = Color("f5edcf")
+	label.outline_size = 8
+	label.outline_modulate = Color(0.04, 0.05, 0.06, 0.9)
+	label.position = Vector3(point.x, terrain_height(point.x, point.y) + height, point.y)
+	label.set_meta("gmc_terrain_aligned", true)
+	add_child(label)
+
+
+func random_road_spawn() -> Dictionary:
+	if map_roads.is_empty():
+		return {}
+	var segment: Dictionary = map_roads.pick_random()
+	var a: Vector2 = segment.from
+	var b: Vector2 = segment.to
+	var direction := (b - a).normalized()
+	if randf() < 0.5:
+		direction = -direction
+	var point := a.lerp(b, randf_range(0.2, 0.8))
+	return {"x": point.x, "z": point.y, "yaw": atan2(direction.x, direction.y)}
+
+
+func _place_gmc_lamps() -> void:
+	var pole_m := Build.mat(Build.hex(0x1a1a1a), 0.4, 0.7)
+	var bulb_m := Build.emissive(Build.hex(0xffeac0), Build.hex(0xffeac0), 0.0)
+	var count := 0
+	for segment in map_roads:
+		if count >= 30:
+			break
+		if segment.name.is_empty():
+			continue
+		var a: Vector2 = segment.from
+		var b: Vector2 = segment.to
+		if a.distance_to(b) < 14.0 or a.distance_to(b) > 60.0:
+			continue
+		var midpoint := a.lerp(b, 0.5)
+		var side: Vector2 = (b - a).normalized().orthogonal() \
+			* (segment.width * 0.5 + 2.0)
+		var point: Vector2 = midpoint + side
+		if collides_at(point.x, point.y, 0.6):
+			continue
+		var ground_y := terrain_height(point.x, point.y)
+		var pole := Build.cyl(0.08, 0.12, 5.0, 8, pole_m)
+		pole.position = Vector3(point.x, ground_y + 2.5, point.y)
+		add_child(pole)
+		var bulb := Build.sphere(0.28, bulb_m)
+		bulb.position = Vector3(point.x, ground_y + 4.85, point.y + 0.55)
+		add_child(bulb)
+		lamp_mats.append(bulb_m)
+		var lamp_light := OmniLight3D.new()
+		lamp_light.position = Vector3(point.x, ground_y + 5.4, point.y + 0.55)
+		lamp_light.light_color = Color(1.0, 0.87, 0.62)
+		lamp_light.omni_range = 18.0
+		lamp_light.omni_attenuation = 1.3
+		lamp_light.light_energy = 0.0
+		lamp_light.shadow_enabled = false
+		add_child(lamp_light)
+		lamp_lights.append(lamp_light)
+		count += 1
 
 ## True on the President's estate island.
 func _on_estate(x: float, z: float) -> bool:
@@ -93,10 +1398,11 @@ func _bridge_profile(x: float) -> float:
 		return BRIDGE_H
 	return BRIDGE_H * (join - d) / (join - flat)
 
-## Height of the walkable surface at a point — 0 on flat ground, raised on the
-## elevated river bridges and the dock jetties. Cars and the player ride this.
+## Height of the walkable surface, including mapped GMC elevation and bridges.
 func surface_height(x: float, z: float, alt := 0.0) -> float:
 	var h := terrain_height(x, z)
+	if USE_GMC_MAP and _gmc_bridge_at(x, z):
+		h += GMC_BRIDGE_HEIGHT + 0.14
 	# While the office is occupied, lift the player onto its floor — but only
 	# for a caller already at office altitude; a ground-level caller in the
 	# same footprint (the downtown plaza) must get street height, not y=66.
@@ -104,7 +1410,7 @@ func surface_height(x: float, z: float, alt := 0.0) -> float:
 		var tf := TRADING_FLOOR
 		if absf(x - tf.x) < 11.5 and absf(z - tf.z) < 8.5:
 			return tf.y
-	if absf(x - RIVER_CX) < _river_corridor_half() + 14.0:
+	if not USE_GMC_MAP and absf(x - RIVER_CX) < _river_corridor_half() + 14.0:
 		for i in range(GRID + 1):
 			var gz: float = -WORLD_HALF + i * BLOCK
 			if absf(z - gz) < (ROAD_W + 2.0) / 2.0:
@@ -116,7 +1422,8 @@ func surface_height(x: float, z: float, alt := 0.0) -> float:
 			h = maxf(h, 0.55)
 	# A narrow ankle-deep shoreline lets the player step naturally off the sand
 	# instead of hitting a hard stop while still visibly on the beach.
-	if z > WORLD_HALF + 5.0 and z <= WORLD_HALF + 12.0 and alt < 1.0 \
+	if not USE_GMC_MAP and z > WORLD_HALF + 5.0 \
+		and z <= WORLD_HALF + 12.0 and alt < 1.0 \
 		and not on_airfield(x, z) and not _on_causeway(x, z) \
 		and not _on_estate(x, z) and not _on_estate_causeway(x, z):
 		h = -0.12
@@ -161,7 +1468,7 @@ const SPACECRAFT_PAD := {"x": 245.0, "z": -627.0}
 # at the City Planning kiosk beside the realtor (ISLAND_KIOSK); construction
 # renders in stages (see _build_island / set_island_stage).
 const ISLAND := {"x": 1180.0, "z": 40.0, "hw": 190.0, "hd": 160.0, "bridge_z": 40.0}
-const ISLAND_KIOSK := {"x": 40.0, "z": -6.0}   # beside the realtor's kiosk (32,-6)
+const ISLAND_KIOSK := {"x": 136.0, "z": 88.0}   # beside the realtor's kiosk
 const ISLAND_COST := 500_000_000_000
 
 # The He-3 economy: mine at the lunar extractor (moon-surface x/z), sell at
@@ -193,6 +1500,22 @@ const OFFICE_EXIT := {"x": 0.0, "z": -0.5}    # exit pad, and the arrival point
 const OFFICE_DESK := {"x": 0.0, "z": 8.0}     # standing spot in front of the desk
 
 var buildings: Array = []            # collision AABBs {x,z,w,d,h}
+var map_roads: Array[Dictionary] = [] # OSM road segments in game coordinates
+var _gmc_road_grid: Dictionary = {}
+var _gmc_road_endpoint_counts: Dictionary = {}
+var map_water_segments: Array[Dictionary] = []
+var map_green_areas: Array[PackedVector2Array] = []
+var map_building_polygons: Array[Dictionary] = []
+var map_tree_positions: Array[Vector2] = []
+var gmc_infill_count := 0
+var gmc_midrise_count := 0
+var gmc_bridge_count := 0
+var gmc_village_center := Vector2.ZERO
+var gmc_village_building_count := 0
+var _gmc_dem := PackedInt32Array()
+var _gmc_dem_origin := Vector2.ZERO
+var _gmc_dem_step := Vector2.ZERO
+var _gmc_labeled_names: Dictionary = {}
 # Spatial hash over `buildings` so collides_at() only tests nearby AABBs
 # instead of scanning the whole city. Rebuilt lazily whenever the list grows.
 const _BGRID_CELL := 24.0
@@ -253,11 +1576,12 @@ var architecture: Architecture
 func generate() -> void:
 	architecture = Architecture.new()
 	add_child(architecture)
+	_load_gmc_elevation()
 	_earth_noise.seed = 81723
 	_earth_noise.frequency = 0.008
 	_earth_noise.fractal_octaves = 4
-	# Real asphalt + lane markings from the modular road pack (CC0) — tiled along
-	# every street (see _add_road_strip). White albedo so the texture shows true.
+	# Asphalt and footpath tiles are shared by the procedural grid and OSM
+	# ribbons. The OSM mesh supplies its own metre-scaled UVs.
 	_road_mat = Build.mat(Build.hex(0xffffff), 0.9)
 	_road_mat.albedo_texture = load("res://assets/textures/road.png")
 	_stripe_mat = Build.mat(Build.hex(0xd9c020), 0.85)
@@ -291,6 +1615,7 @@ func generate() -> void:
 	buildings.append_array(track.solids)
 	_add_suburbs()
 	_add_outer_landscape()
+	_build_medieval_village()
 	# The procedural sky provides atmospheric perspective; omit opaque cloud-ball meshes.
 	architecture.finish()
 	_build_window_multimesh()
@@ -312,7 +1637,10 @@ func _add_ground() -> void:
 ## Signed inland distance, shared by the visible shore and gameplay queries.
 func coast_distance(x: float, z: float) -> float:
 	var outer := smoothstep(220.0, 440.0, absf(x))
-	var south := WORLD_HALF + 10.0 + outer * (24.0 * sin(x * 0.013) + 13.0 * sin(x * 0.031))
+	var south_edge := WORLD_HALF + 10.0
+	if USE_GMC_MAP:
+		south_edge += 105.0
+	var south := south_edge + outer * (24.0 * sin(x * 0.013) + 13.0 * sin(x * 0.031))
 	var side := LAND_HALF - 55.0 + 32.0 * sin(z * 0.009) + 19.0 * sin(z * 0.023)
 	var north := -LAND_HALF + 40.0 + 28.0 * sin(x * 0.011) + 16.0 * cos(x * 0.025)
 	var mainland := minf(south - z, minf(side - absf(x), z - north))
@@ -332,8 +1660,32 @@ func terrain_height(x: float, z: float) -> float:
 	var hills := (9.0 + 12.0 * _earth_noise.get_noise_2d(x, z)) * wild
 	var facility_flat := smoothstep(120.0, 190.0, Vector2(x - LAUNCH.x, z - LAUNCH.z).length())
 	var h := shore + hills * facility_flat * smoothstep(12.0, 80.0, inland)
-	if absf(x - RIVER_CX) < _river_corridor_half() and absf(z) < WORLD_HALF + 12.0:
+	if not USE_GMC_MAP and absf(x - RIVER_CX) < _river_corridor_half() \
+		and absf(z) < WORLD_HALF + 12.0:
 		h = RIVER_BED_Y
+	if _gmc_dem.size() == GMC_DEM_SIZE * GMC_DEM_SIZE:
+		var grid_x := (x - _gmc_dem_origin.x) / _gmc_dem_step.x
+		var grid_z := (z - _gmc_dem_origin.y) / _gmc_dem_step.y
+		if grid_x >= 0.0 and grid_z >= 0.0 \
+			and grid_x <= GMC_DEM_SIZE - 1 and grid_z <= GMC_DEM_SIZE - 1:
+			var dem_x := int(floor(grid_x))
+			var dem_z := int(floor(grid_z))
+			var next_x := mini(dem_x + 1, GMC_DEM_SIZE - 1)
+			var next_z := mini(dem_z + 1, GMC_DEM_SIZE - 1)
+			var fx := grid_x - float(dem_x)
+			var fz := grid_z - float(dem_z)
+			var top := lerpf(
+				float(_gmc_dem[dem_z * GMC_DEM_SIZE + dem_x]),
+				float(_gmc_dem[dem_z * GMC_DEM_SIZE + next_x]), fx)
+			var bottom := lerpf(
+				float(_gmc_dem[next_z * GMC_DEM_SIZE + dem_x]),
+				float(_gmc_dem[next_z * GMC_DEM_SIZE + next_x]), fx)
+			var dem_height := (lerpf(top, bottom, fz) - GMC_DEM_REFERENCE_ELEVATION) \
+				* GMC_MAP_SCALE
+			var edge_distance := minf(
+				minf(grid_x, GMC_DEM_SIZE - 1 - grid_x) * _gmc_dem_step.x,
+				minf(grid_z, GMC_DEM_SIZE - 1 - grid_z) * _gmc_dem_step.y)
+			h = lerpf(h, dem_height, smoothstep(0.0, GMC_DEM_BLEND_MARGIN, edge_distance))
 	return h
 
 
@@ -354,18 +1706,20 @@ func _add_natural_terrain() -> void:
 				var v := points[j]
 				var green := smoothstep(9.0, 32.0, coast_distance(v.x, v.z))
 				var shade := 0.95 + 0.09 * _earth_noise.get_noise_2d(v.x*2.5, v.z*2.5)
-				st.set_color(Build.hex(0xc8b98e).lerp(Build.hex(0x637349), green) * Color(shade, shade, shade, 1))
+				var terrain_color := Build.hex(0xc8b98e).lerp(Build.hex(0x637349), green)
+				if USE_GMC_MAP:
+					var urban := 1.0 - smoothstep(150.0, 320.0, Vector2(v.x, v.z).length())
+					terrain_color = Build.hex(0x77766f).lerp(terrain_color, 1.0 - urban)
+				st.set_color(terrain_color * Color(shade, shade, shade, 1))
 				var eps := 0.5
 				st.set_normal(Vector3(terrain_height(v.x-eps, v.z)-terrain_height(v.x+eps, v.z),
 					2.0*eps, terrain_height(v.x, v.z-eps)-terrain_height(v.x, v.z+eps)).normalized())
+				st.set_uv(Vector2(v.x, v.z) * GROUND_TEXTURE_UV_SCALE)
 				st.add_vertex(v)
 	var mi := MeshInstance3D.new()
 	mi.name = "NaturalCoastTerrain"
 	mi.mesh = st.commit()
-	var mat := Build.mat(Color.WHITE, 0.96)
-	mat.vertex_color_use_as_albedo = true
-	mat.vertex_color_is_srgb = true
-	mi.material_override = mat
+	mi.material_override = Build.ground()
 	add_child(mi)
 
 
@@ -438,7 +1792,7 @@ func _add_city_ground_split() -> void:
 
 ## Visual water height at a point — canal is recessed; bay/open sea is higher.
 func water_surface_y(x: float, z: float) -> float:
-	if absf(x - RIVER_CX) < RIVER_HALF + 2.0 \
+	if not USE_GMC_MAP and absf(x - RIVER_CX) < RIVER_HALF + 2.0 \
 		and z > -WORLD_HALF - 4.0 and z < WORLD_HALF + 20.0:
 		return RIVER_WATER_Y
 	return SEA_WATER_Y
@@ -1468,11 +2822,28 @@ func _add_road_geometry(x: float, z: float, w: float, d: float) -> void:
 
 func _add_building(x: float, z: float, w: float, d: float, h: float, color: int) -> void:
 	var style := 0 if h >= 30.0 else (1 if int(absf(x+z)) % 3 == 0 else 2)
-	architecture.building(x, z, w, d, h, style, Build.hex(color))
-	buildings.append({"x": x, "z": z, "w": w+0.35, "d": d+0.35, "h": h+2.2})
+	var base_y := terrain_height(x, z)
+	architecture.building(x, z, w, d, h, style, Build.hex(color), base_y)
+	buildings.append({
+		"x": x, "z": z, "w": w+0.35, "d": d+0.35, "h": h+2.2, "base_y": base_y,
+	})
 
 
 func _build_city() -> void:
+	if USE_GMC_MAP:
+		var first_city_child := get_child_count()
+		_build_gmc_map()
+		_load_gmc_map_data()
+		_build_exchange(EXCHANGE.x, EXCHANGE.z)
+		_build_dealership(DEALERSHIP.x, DEALERSHIP.z)
+		_build_stark_lab(STARK_LAB.x, STARK_LAB.z)
+		_build_realtor(REALTOR.x, REALTOR.z)
+		_build_hospital(HOSPITAL.x, HOSPITAL.z)
+		_build_ventures(VENTURES.x, VENTURES.z)
+		for idx in PropertyCatalog.LIST.size():
+			_build_safehouse(idx)
+		_align_gmc_city_children_to_terrain(first_city_child)
+		return
 	# North-south roads — skip any strip that would land in the canal corridor.
 	for i in range(GRID + 1):
 		var rx := -WORLD_HALF + i * BLOCK
@@ -1571,6 +2942,15 @@ func _build_city() -> void:
 			_add_leafy_tree(x, z)
 
 
+func _align_gmc_city_children_to_terrain(first_child: int) -> void:
+	for index in range(first_child, get_child_count()):
+		var child := get_child(index) as Node3D
+		if child == null or child.has_meta("gmc_terrain_aligned") \
+			or child.name == "JuizDeForaMap" or child.name.begins_with("GMC "):
+			continue
+		child.position.y += terrain_height(child.position.x, child.position.z)
+
+
 ## True close to either axis of the city street grid. Used by randomized prop
 ## placement so a valid road never becomes blocked only on certain world seeds.
 func _near_city_road(x: float, z: float, sidewalk_margin: float) -> bool:
@@ -1630,8 +3010,11 @@ func _build_exchange(cx: float, cz: float) -> void:
 	var td := 9.0
 	var th := 66.0
 	var tz := cz + 3.0
-	architecture.building(cx, tz, tw, td, th, 0, Color("999e9d"))
-	buildings.append({"x": cx, "z": tz, "w": tw, "d": td, "h": th})
+	var base_y := terrain_height(cx, tz)
+	architecture.building(cx, tz, tw, td, th, 0, Color("999e9d"), base_y)
+	buildings.append({
+		"x": cx, "z": tz, "w": tw, "d": td, "h": th, "base_y": base_y,
+	})
 
 	var sign_panel := Build.cmat(Color("26312f"), 0.4)
 	var sign := Build.box(12.0, 3.6, 0.4, sign_panel)
@@ -2354,10 +3737,13 @@ func _build_hospital(cx: float, cz: float) -> void:
 ## The player presses E at the lobby doors to open the venture terminal.
 func _build_ventures(cx: float, cz: float) -> void:
 	var tz := cz+2.5
-	architecture.building(cx, tz, 15.0, 10.0, 43.6, 0, Color("a6a7a0"))
-	buildings.append({"x": cx, "z": tz, "w": 15.0, "d": 10.0, "h": 45.8})
+	var base_y := terrain_height(cx, tz)
+	architecture.building(cx, tz, 15.0, 10.0, 43.6, 0, Color("a6a7a0"), base_y)
+	buildings.append({
+		"x": cx, "z": tz, "w": 15.0, "d": 10.0, "h": 45.8, "base_y": base_y,
+	})
 	var stone := Build.pbr("Concrete034", Color("83877f"), 0.65)
-	architecture.box(Vector3(16, 0.16, 15), Vector3(cx, 0.08, cz), stone)
+	architecture.box(Vector3(16, 0.16, 15), Vector3(cx, base_y + 0.08, cz), stone)
 	var panel := Build.box(10, 1.0, 0.18, Build.cmat(Color("232a2c"), 0.4, 0.35))
 	panel.position = Vector3(cx, 3.8, tz-5.15)
 	add_child(panel)
@@ -2967,6 +4353,8 @@ func _add_leafy_tree(x: float, z: float) -> void:
 ## A leisure stretch along the western part of the south shore — towels,
 ## sunbathers in swimwear, parasols, strolling beachgoers and moored boats.
 func _build_beach() -> void:
+	if USE_GMC_MAP:
+		return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 20260521
 	var skins := [0xe8b890, 0xc88a5a, 0xf0c8a0, 0x8d5a3a, 0xd6a070]
@@ -3072,6 +4460,8 @@ func _add_boat(x: float, z: float, yaw: float, rng: RandomNumberGenerator) -> vo
 ## Wooden jetties on the riverbanks and the beach — boats moor here and the
 ## player can walk the planks on or off a boat.
 func _build_docks() -> void:
+	if USE_GMC_MAP:
+		return
 	var plank_m := Build.mat(Build.hex(0x8a6a40), 0.9)
 	var pile_m := Build.mat(Build.hex(0x4f3c22), 0.95)
 	# Each pier runs from a bank end to a water end (the board point). River
@@ -3313,6 +4703,9 @@ func _track_line_dist(x: float, z: float) -> float:
 
 
 func _place_lamps() -> void:
+	if USE_GMC_MAP:
+		_place_gmc_lamps()
+		return
 	var pole_m := Build.mat(Build.hex(0x1a1a1a), 0.4, 0.7)
 	for i in range(GRID + 1):
 		for j in range(GRID + 1):
@@ -3594,10 +4987,48 @@ func _add_suburbs() -> void:
 		if Vector2(LAUNCH.x - x, LAUNCH.z - z).length() < 110.0:
 			continue
 		# Other houses, trees and authored structures keep lots separated.
-		if collides_at(x, z, 14.0):
+		if collides_at(x, z, 14.0) \
+			or not _gmc_building_clear_of_water(Vector2(x, z), 16.5, 19.0):
 			continue
 		_add_house(x, z, randf() * TAU)
 		made += 1
+
+
+func _build_medieval_village() -> void:
+	if not USE_GMC_MAP:
+		return
+	var candidates: Array[Vector2] = [
+		Vector2(500.0, -470.0),
+		Vector2(-500.0, -470.0),
+		Vector2(560.0, -450.0),
+		Vector2(-560.0, -450.0),
+		Vector2(460.0, -540.0),
+		Vector2(-460.0, -540.0),
+	]
+	var site := Vector2.ZERO
+	var site_found := false
+	for candidate in candidates:
+		if coast_distance(candidate.x, candidate.y) <= 24.0 \
+			or on_water(candidate.x, candidate.y) \
+			or not _gmc_building_clear_of_water(candidate, 38.0, 38.0) \
+			or collides_at(candidate.x, candidate.y, 26.0):
+			continue
+		site = candidate
+		site_found = true
+		break
+	if not site_found:
+		push_error("Could not find a clear inland site for the Medieval Village")
+		return
+
+	var village := MEDIEVAL_VILLAGE_SCENE.instantiate() as MedievalVillage
+	if village == null:
+		push_error("Could not instantiate the Medieval Village scene")
+		return
+	add_child(village)
+	village.build(self, site)
+	buildings.append_array(village.collision_records)
+	gmc_village_center = site
+	gmc_village_building_count = village.building_records.size()
 
 ## A complete suburban lot: foundation, textured facade, gabled tiled roof,
 ## framed openings, porch, driveway and optional attached garage. The lot is
@@ -3667,7 +5098,7 @@ func _add_house(x: float, z: float, yaw: float) -> void:
 		house.add_child(garage_door)
 		var g_world := house.to_global(Vector3(glocal.x, 0, glocal.z))
 		buildings.append({"x": g_world.x, "z": g_world.z, "w": gw, "d": gd,
-			"h": gh + 0.4, "yaw": yaw})
+			"h": gh + 0.4, "yaw": yaw, "kind": "suburb_garage"})
 	# Mailbox and low hedge establish a clear front edge to the lot.
 	var mailbox := Build.box(0.45, 0.38, 0.65, Build.cmat(Build.hex(0x394149), 0.6, 0.3))
 	mailbox.position = Vector3(w / 2.0 + 1.4, 1.0, -d / 2.0 - 3.0)
@@ -3683,7 +5114,7 @@ func _add_house(x: float, z: float, yaw: float) -> void:
 	# both axes, producing broad invisible corners around almost every house.
 	var rr := maxf(w, d) + 0.8
 	buildings.append({"x": x, "z": z, "w": w + 0.5, "d": d + 0.5,
-		"h": h + 2.4, "yaw": yaw})
+		"h": h + 2.4, "yaw": yaw, "kind": "suburb_house"})
 	if randf() < 0.55:
 		var ta := randf() * TAU
 		var td := rr / 2.0 + 4.0 + randf() * 6.0
@@ -3819,7 +5250,8 @@ func collides_at(x: float, z: float, r := 0.5, altitude := 0.0) -> bool:
 		for cz in range(int(floor((z - r) / _BGRID_CELL)), int(floor((z + r) / _BGRID_CELL)) + 1):
 			var cell: Array = _bgrid.get(Vector2i(cx, cz), [])
 			for b in cell:
-				if altitude > b.h + 2.0:
+				var base_y := float(b.get("base_y", terrain_height(float(b.x), float(b.z))))
+				if altitude > base_y + float(b.h) + 2.0:
 					continue
 				if b.get("round", false):
 					if Vector2(x - b.x, z - b.z).length() < b.w / 2.0 + r:
@@ -3860,7 +5292,10 @@ func collides_at(x: float, z: float, r := 0.5, altitude := 0.0) -> bool:
 		return false
 	# The city river is open water — the bridges arch high above it, so anything
 	# down at ground level is blocked the whole length of the channel.
-	if absf(x - RIVER_CX) < RIVER_HALF and z > -WORLD_HALF and z < WORLD_HALF \
+	if USE_GMC_MAP and on_water(x, z) and altitude < 5.0:
+		return true
+	if not USE_GMC_MAP and absf(x - RIVER_CX) < RIVER_HALF \
+		and z > -WORLD_HALF and z < WORLD_HALF \
 		and altitude < BRIDGE_H - 1.2:
 		# …except where the F1 circuit's tarmac spans the channel: its southern
 		# straight crosses at z ≈ 154, just south of the last bridge's lift

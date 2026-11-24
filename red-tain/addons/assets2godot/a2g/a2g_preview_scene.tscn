@@ -1,0 +1,285 @@
+[gd_scene load_steps=30 format=3 uid="uid://566u8r3plave"]
+
+[ext_resource type="PackedScene" path="res://addons/assets2godot/a2g/a2g_provider_stage.tscn" id="1"]
+[ext_resource type="Script" path="res://addons/assets2godot/a2g/a2g_preview_scene.gd" id="2"]
+[ext_resource type="Texture2D" path="res://addons/assets2godot/a2g/a2g_icon.svg" id="3"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
+
+[sub_resource type="Sky" id="Sky_sky"]
+resource_local_to_scene = true
+sky_material = SubResource("ProceduralSkyMaterial_sky")
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributes_exposure"]
+exposure_multiplier = 1.5
+
+[sub_resource type="Environment" id="Environment_env"]
+resource_local_to_scene = true
+background_mode = 2
+sky = SubResource("Sky_sky")
+ambient_light_source = 3
+reflected_light_source = 2
+tonemap_mode = 4
+tonemap_exposure = 1.0
+camera_attributes = SubResource("CameraAttributes_exposure")
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
+size = Vector2(60, 60)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
+albedo_color = Color(0.42, 0.42, 0.42, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_pad"]
+top_radius = 3.0
+bottom_radius = 3.0
+height = 0.05
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pad"]
+albedo_color = Color(0.32, 0.32, 0.32, 1)
+roughness = 0.95
+
+[sub_resource type="SphereMesh" id="SphereMesh_ball"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_big"]
+radius = 1.2
+height = 2.4
+
+[sub_resource type="BoxMesh" id="BoxMesh_unit"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_wall"]
+size = Vector3(3, 2, 0.2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ramp"]
+size = Vector3(3, 0.1, 2)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_mark"]
+size = Vector2(2.4, 2.4)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mark"]
+transparency = 1
+albedo_color = Color(1, 1, 1, 0.18)
+albedo_texture = ExtResource("3")
+roughness = 0.5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_cyl"]
+top_radius = 0.5
+bottom_radius = 0.5
+height = 2.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_column"]
+size = Vector3(0.6, 3, 0.6)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_chrome"]
+metallic = 1.0
+roughness = 0.05
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gray18"]
+albedo_color = Color(0.461, 0.461, 0.461, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_neutral"]
+albedo_color = Color(0.8, 0.8, 0.8, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_r0"]
+albedo_color = Color(0.8, 0.8, 0.8, 1)
+roughness = 0.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_r33"]
+albedo_color = Color(0.8, 0.8, 0.8, 1)
+roughness = 0.33
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_r66"]
+albedo_color = Color(0.8, 0.8, 0.8, 1)
+roughness = 0.66
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_r100"]
+albedo_color = Color(0.8, 0.8, 0.8, 1)
+roughness = 1.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_red"]
+albedo_color = Color(0.85, 0.1, 0.08, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_green"]
+albedo_color = Color(0.1, 0.75, 0.12, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_blue"]
+albedo_color = Color(0.12, 0.25, 0.9, 1)
+
+[node name="A2GPreviewScene" type="Node3D"]
+script = ExtResource("2")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8660254, -0.35355338, 0.35355338, 0, 0.70710677, 0.70710677, -0.5, -0.61237246, 0.61237246, 2.5, 5, -2.5)
+light_energy = 0.4
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.912924, -0.143609, 0.38203, 0, 0.936049, 0.35187, -0.408131, -0.32123, 0.854541, 9.777354, 12.6173, 20.28459)
+current = true
+
+[node name="Ground" type="MeshInstance3D" parent="."]
+mesh = SubResource("PlaneMesh_ground")
+surface_material_override/0 = SubResource("StandardMaterial3D_ground")
+
+[node name="DropPad" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.026, 0)
+mesh = SubResource("CylinderMesh_pad")
+surface_material_override/0 = SubResource("StandardMaterial3D_pad")
+
+[node name="A2GMark" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.058, 0)
+mesh = SubResource("PlaneMesh_mark")
+surface_material_override/0 = SubResource("StandardMaterial3D_mark")
+metadata/_edit_lock_ = true
+metadata/a2g_no_drop = true
+
+[node name="DropTargets" type="Node3D" parent="."]
+
+[node name="LblTargets" type="Label3D" parent="DropTargets"]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, -2, 3, -8)
+billboard = 1
+modulate = Color(1, 1, 1, 1)
+outline_modulate = Color(0, 0, 0, 0.3)
+font_size = 48
+outline_size = 10
+text = "D R O P   T A R G E T S"
+
+[node name="Wall" type="MeshInstance3D" parent="DropTargets"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 1, -8)
+mesh = SubResource("BoxMesh_wall")
+surface_material_override/0 = SubResource("StandardMaterial3D_neutral")
+
+[node name="Ramp" type="MeshInstance3D" parent="DropTargets"]
+transform = Transform3D(1, 0, 0, 0, 0.8660254, -0.5, 0, 0.5, 0.8660254, -6, 0.6, -8)
+mesh = SubResource("BoxMesh_ramp")
+surface_material_override/0 = SubResource("StandardMaterial3D_neutral")
+
+[node name="Cylinder" type="MeshInstance3D" parent="DropTargets"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 1, -8)
+mesh = SubResource("CylinderMesh_cyl")
+surface_material_override/0 = SubResource("StandardMaterial3D_neutral")
+
+[node name="Column" type="MeshInstance3D" parent="DropTargets"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 1.5, -8)
+mesh = SubResource("BoxMesh_column")
+surface_material_override/0 = SubResource("StandardMaterial3D_neutral")
+
+[node name="DropBall" type="MeshInstance3D" parent="DropTargets"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1.2, -8)
+mesh = SubResource("SphereMesh_big")
+surface_material_override/0 = SubResource("StandardMaterial3D_neutral")
+
+[node name="References" type="Node3D" parent="."]
+
+[node name="LblRefs" type="Label3D" parent="References"]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 1.8, 7)
+billboard = 1
+modulate = Color(1, 1, 1, 1)
+outline_modulate = Color(0, 0, 0, 0.3)
+font_size = 48
+outline_size = 10
+text = "R E F E R E N C E S"
+
+[node name="ChromeBall" type="MeshInstance3D" parent="References"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.5, 7)
+mesh = SubResource("SphereMesh_ball")
+surface_material_override/0 = SubResource("StandardMaterial3D_chrome")
+
+[node name="GrayBall18" type="MeshInstance3D" parent="References"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.5, 0.5, 7)
+mesh = SubResource("SphereMesh_ball")
+surface_material_override/0 = SubResource("StandardMaterial3D_gray18")
+
+[node name="RoughBall00" type="MeshInstance3D" parent="References"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0.5, 7)
+mesh = SubResource("SphereMesh_ball")
+surface_material_override/0 = SubResource("StandardMaterial3D_r0")
+
+[node name="RoughBall33" type="MeshInstance3D" parent="References"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.5, 7)
+mesh = SubResource("SphereMesh_ball")
+surface_material_override/0 = SubResource("StandardMaterial3D_r33")
+
+[node name="RoughBall66" type="MeshInstance3D" parent="References"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 7)
+mesh = SubResource("SphereMesh_ball")
+surface_material_override/0 = SubResource("StandardMaterial3D_r66")
+
+[node name="RoughBall100" type="MeshInstance3D" parent="References"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.5, 7)
+mesh = SubResource("SphereMesh_ball")
+surface_material_override/0 = SubResource("StandardMaterial3D_r100")
+
+[node name="RedBall" type="MeshInstance3D" parent="References"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0.5, 7)
+mesh = SubResource("SphereMesh_ball")
+surface_material_override/0 = SubResource("StandardMaterial3D_red")
+
+[node name="GreenBall" type="MeshInstance3D" parent="References"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 0.5, 7)
+mesh = SubResource("SphereMesh_ball")
+surface_material_override/0 = SubResource("StandardMaterial3D_green")
+
+[node name="BlueBall" type="MeshInstance3D" parent="References"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.5, 7)
+mesh = SubResource("SphereMesh_ball")
+surface_material_override/0 = SubResource("StandardMaterial3D_blue")
+
+[node name="ScaleRow" type="Node3D" parent="."]
+
+[node name="LblScale" type="Label3D" parent="ScaleRow"]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 12.5, 3, 5)
+billboard = 1
+modulate = Color(1, 1, 1, 1)
+outline_modulate = Color(0, 0, 0, 0.3)
+font_size = 48
+outline_size = 10
+text = "S C A L E"
+
+[node name="Cube025" type="MeshInstance3D" parent="ScaleRow"]
+transform = Transform3D(0.25, 0, 0, 0, 0.25, 0, 0, 0, 0.25, 9, 0.125, 2)
+mesh = SubResource("BoxMesh_unit")
+surface_material_override/0 = SubResource("StandardMaterial3D_neutral")
+
+[node name="Cube050" type="MeshInstance3D" parent="ScaleRow"]
+transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 10, 0.25, 2)
+mesh = SubResource("BoxMesh_unit")
+surface_material_override/0 = SubResource("StandardMaterial3D_neutral")
+
+[node name="Cube100" type="MeshInstance3D" parent="ScaleRow"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.5, 0.5, 2)
+mesh = SubResource("BoxMesh_unit")
+surface_material_override/0 = SubResource("StandardMaterial3D_neutral")
+
+[node name="Cube200" type="MeshInstance3D" parent="ScaleRow"]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 13.5, 1, 2)
+mesh = SubResource("BoxMesh_unit")
+surface_material_override/0 = SubResource("StandardMaterial3D_neutral")
+
+[node name="Cube400" type="MeshInstance3D" parent="ScaleRow"]
+transform = Transform3D(4, 0, 0, 0, 4, 0, 0, 0, 4, 16.5, 2, 2)
+mesh = SubResource("BoxMesh_unit")
+surface_material_override/0 = SubResource("StandardMaterial3D_neutral")
+
+[node name="LblStages" type="Label3D" parent="."]
+transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, -14, 3.5, -11)
+billboard = 1
+modulate = Color(1, 1, 1, 1)
+outline_modulate = Color(0, 0, 0, 0.3)
+font_size = 48
+outline_size = 10
+text = "P R O V I D E R   S T A G E S"
+
+[node name="PolyhavenStage" parent="." instance=ExtResource("1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, -6)
+provider = "polyhaven"
+
+[node name="AmbientcgStage" parent="." instance=ExtResource("1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, -16)
+provider = "ambientcg"
+
+[node name="AutoPlaced" type="Node3D" parent="."]

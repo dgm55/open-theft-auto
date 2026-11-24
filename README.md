@@ -1,23 +1,28 @@
 # Open Theft Auto
 
-A **Godot 4.7** open-world sandbox — a GTA-style "Vice Beach" homage built in
-pure GDScript. Third-person: walk, drive, fly, shoot, invest and build a
-reputation in a procedural, Los-Angeles-style island city with a wanted/police
-system, a day/night cycle, a full economy, a wearable Iron-Man-style flight
-suit, an F1 circuit, and a Space Shuttle trip to the Moon from a hidden
-wilderness facility. Playable end-to-end on **keyboard + mouse or a game
-controller**, with saved progress.
+A **Godot 4.7** open-world sandbox — a GTA-style homage built in pure
+GDScript. Third-person: walk, drive, fly, shoot, invest and build a reputation
+in a game world anchored by a 3D map of Manoel Honório, Juiz de Fora, Brazil.
+The map rebuilds streets and mapped buildings from `GMC/map_expanded.osm`,
+adds a 45×45 SRTM elevation grid, and fills gaps in residential building data
+with procedural houses. The supplied `GMC/map.glb` remains as a coordinate
+reference; its old flat overlays are hidden. The airport, F1 circuit, economy,
+flight suit and Moon trip remain game-built additions.
+Playable end-to-end on **keyboard + mouse or a game controller**, with saved
+progress.
 
 > Open Theft Auto is an unofficial, fan-made homage. It is not affiliated with,
 > endorsed by, or connected to Rockstar Games or Take-Two Interactive, and uses
 > none of their assets.
 
-The city is split into districts: a **downtown** core of glassy skyscrapers, a
-mid-rise **commercial** ring, sprawling **residential villas** (each with a
-lawn, pool, garage and pitched roof), green **parks** with ponds, and a
-north-south **river** crossed by bridges. Flat wooded wilderness surrounds the
-city, while an **airport island** and the **President's estate**
-sit off the coast across causeways, and the **Moon** hangs high above.
+The playable city center follows the supplied Manoel Honório-area map, with
+OpenStreetMap roads, green spaces, waterways, named places and building
+footprints. Where OSM has no residential footprints, deterministic procedural
+houses add density along residential streets; these are visual infill, not
+surveyed rooftop locations. Game businesses and safehouses are placed around
+the same street network. The airport, President's estate, F1 circuit and
+wilderness facility remain separate game locations, while the **Moon** hangs
+high above.
 
 Deep in the northern wilderness — off the map, no waypoint, no minimap marker —
 sits a hidden facility: a fenced compound with a hangar, a control tower and
@@ -35,8 +40,9 @@ control onto the Moon (or back to Earth) wherever you choose to set down.
 
 1. Install **Godot 4.7+** (standard, not .NET — the project is pure GDScript).
 2. Open Godot, **Import** this folder (`gta-my-city/`), or open `project.godot`.
-3. Press **F5** (Run Project). At the boot screen pick **NEW GAME**, or
-   **CONTINUE** if you have a save.
+3. Press **F5** (Run Project). Choose **START GAME**, or **CONTINUE** /
+   **NEW GAME** if a save exists. **CONTROLS** opens the keyboard/controller
+   map; **EXIT** closes the game.
 
 > If you run inside the editor's embedded game view, fullscreen fills that
 > panel. For true monitor fullscreen, run the exported `.app`, or turn off
@@ -81,6 +87,7 @@ diagram. The defaults:
 | Move / steer · Look camera | Left stick · Right stick |
 | Accelerate / Brake (driving) | R2 / L2 |
 | Aim down sights · Fire | L2 · R2 |
+| Alt-fire / suit missiles | L1 |
 | Sprint · Melee | Left back paddle · Right back paddle |
 | Boost · Handbrake · Interact · Summon suit · Enter/Exit | ✕ · □ · □ · ○ · △ |
 | Prev / next weapon · adjust amount in shops | L1 / R1 |
@@ -89,8 +96,16 @@ diagram. The defaults:
 | Menus: move focus · confirm · back | D-Pad / stick · ✕ · ○ |
 
 Every shop, terminal, the phone, the boot screen and the pause menu are fully
-navigable and confirmable with the controller. (Back paddles fall back to ✕ /
-R3-click if your controller doesn't report them.)
+navigable and confirmable with the controller. Sprint falls back to ✕ and
+melee to R3-click if the corresponding back paddle is unavailable.
+
+The boot screen follows the centered title-and-button layout of the installed
+Maaack's Game Template. Its multicolor **MARYLAND CITY** display title sits
+over an in-game city image, with a soft system font for the interface and an
+original synthesized music loop that respects mute and stops when gameplay
+starts. The title is presentation only: the playable map is still Manoel
+Honório, Juiz de Fora. The template remains a separate Godot project; the
+game's menu is self-contained and keeps the existing save/start flow.
 
 ## Gameplay
 
@@ -106,6 +121,10 @@ On foot, the player walks at 4.5 m/s and sprints at 8 m/s. An on-foot death
 activates a physics ragdoll on the existing player rig; respawning removes the
 temporary ragdoll and restores the player. Death while in a vehicle, flight suit,
 or parachute remains outside this ragdoll's scope.
+
+A procedural capybara companion appears when a new game starts. It follows the
+player on foot, avoids mapped obstacles, and is hidden while driving, flying,
+parachuting, or inside elevated interiors.
 
 ### Vehicles
 
@@ -194,7 +213,8 @@ project.godot          autoloads, main scene, window config
 scenes/main.tscn       root scene (Node3D + game.gd)
 scripts/
   game.gd                  main orchestrator + game loop
-  world.gd                 CityWorld — procedural city, airport, Moon, collision
+  world.gd                 CityWorld — GMC map, OSM routing/collision, airport, Moon
+  capybara_pet.gd          procedural on-foot companion
   human.gd                 character catalog + procedural / mocap walk animation
   car_mesh.gd              car + F1 mesh builder
   build.gd                 static mesh/material helpers
@@ -221,8 +241,64 @@ scripts/
     race_manager.gd          Grand Prix race state & payouts
 ```
 
-The world (player, vehicles, NPCs, particles) uses pure kinematic movement with
-AABB collision — there are no physics bodies — exactly mirroring the prototype.
+Normal gameplay movement and map collision use kinematic movement with AABB
+checks. Physics is limited to the temporary on-foot death ragdoll and the
+Moon's surface collider.
+
+## Map data and attribution
+
+`GMC/map_expanded.osm` and the supplied OSM-derived `GMC/map.osm` / `GMC/map.glb`
+are based on **© OpenStreetMap contributors**, available under the
+[Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/).
+Terrain in `GMC/elevation_srtm.csv` is a cropped 1-arc-second NASA/USGS
+Shuttle Radar Topography Mission (SRTM) elevation tile, accessed through the
+AWS Open Data elevation-tile mirror. Google Maps and Street View were consulted
+only as qualitative references for local street widths, sidewalk/green-space
+treatment and building scale around Av. Gov. Valadares, R. Ewbanck da Câmara
+and R. Américo Lôbo. No imagery, screenshots or building geometry were copied
+into the game. The procedural residential infill is an approximation, not
+imagery or a surveyed building dataset.
+
+## Godot add-ons
+
+The Godot Road Generator 0.9.5 addon is enabled for editor use at
+`addons/road-generator`. It provides editor tools for authoring supplemental
+roads, intersections and lane paths. The OSM road network and SRTM grid remain
+the game's sources for map roads, collision, traffic and elevation; the legacy
+flat GLB overlays are hidden and rebuilt from those datasets. The addon does
+not replace these runtime data sources. Its optional Terrain3D connector is
+not used.
+
+The EZTree addon is enabled at `addons/ez-tree-godot-port`. Its procedural tree
+meshes populate mapped OSM parks and green areas at runtime, in a deterministic,
+bounded scatter that avoids roads, buildings and water. Its editor painting
+tool is available for scenes with ground collision; the generated leaf material
+also uses the addon's wind shader.
+
+The other copied starter projects are kept separate from the playable project.
+Maaack's template contains Terrain3D 1.1.0, but only inside its own project
+folder; it is not enabled in this project. The GMC world already builds its
+finite terrain from the SRTM grid and uses the same sampler for roads, gameplay
+height and collision. Replacing that path with Terrain3D would require migrating
+and validating the height data and road connector, with no current gameplay need.
+Likewise, the C#/.NET procedural-world sample and the template menu/audio plugins
+are not imported: they duplicate existing systems or do not match this
+GDScript-only project.
+
+The Quaternius Medieval Village MegaKit is a separate asset pack from
+`maaack's-game-template`. Four modular houses and village props now use its
+textured glTF models in `assets/medieval_village/`; the pack's CC0 1.0 license
+is included there. The pack's other assets and the template's plugins remain
+outside the active game's runtime.
+
+The natural terrain and mapped park polygons use ambientCG Ground037 albedo,
+normal and roughness maps with world-aligned UVs; inferred residential houses
+and OSM buildings use the project's shared PBR facade/roof materials. Static
+village props, fences, and mapped park trees participate in gameplay collision.
+Inferred buildings keep a setback from mapped waterways, and buried culverts
+are not rendered as open surface water. See
+[`INVENTARIO_RECURSOS_GODOT.md`](INVENTARIO_RECURSOS_GODOT.md) for plugin
+activation by project, asset counts, usage, and license references.
 
 ## Export for macOS
 
@@ -246,8 +322,8 @@ Issues and pull requests are welcome. The whole game is plain GDScript under
 ## Credits
 
 Almost everything in the world is generated procedurally in GDScript. The
-third-party art assets are the vehicles and the human character models, all used
-under their respective licenses:
+third-party art assets include vehicles, human character models and modular
+village pieces, used under their respective licenses:
 
 - **McLaren MCL35M** by [chwashere123](https://sketchfab.com/chwashere123)
   ([Sketchfab](https://sketchfab.com/3d-models/mc-laren-mcl35m-14ae5aaa76e14c278f7d0e45e065279d)),
@@ -258,6 +334,12 @@ under their respective licenses:
 - **Universal Base Characters** by [Quaternius](https://quaternius.com/), a
   free/CC0 rigged human pack. The cop and re-tinted "civilian" NPC bodies used
   throughout `scripts/human.gd`; the models live in `assets/characters/ubc/`.
+
+- **Medieval Village MegaKit** by [Quaternius](https://quaternius.com/), licensed
+  under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Selected
+  textured glTF modules form the four-house village POI in
+  `assets/medieval_village/`; the included `License_Standard.txt` records the
+  pack attribution and license.
 
 - **"Indian Man in suit"** by [Pixel_Monster](https://sketchfab.com/ar.jethin)
   ([Sketchfab](https://sketchfab.com/3d-models/indian-man-in-suit-985dd9756d89464b9380414b5b12d8aa)),

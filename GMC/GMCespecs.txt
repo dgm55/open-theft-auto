@@ -1,0 +1,41 @@
+GMC — status da implementação
+
+Legenda:
+[x] Implementado e validado por auditoria ou execução do código.
+[~] Parcialmente implementado; falta parte do escopo pedido.
+[ ] Não implementado.
+
+Cenário
+[x] Capivara — companheira procedural que acompanha o jogador a pé; auditada
+    em tests/capybara_pet_audit.tscn.
+[ ] Sistema de pets adicionais, adoção ou coleção.
+[ ] Mapa de Maryland City — “Maryland City” é apenas o título do menu; o GMC
+    fornecido e o mapa atual são de Manoel Honório, Juiz de Fora (MG).
+
+Veículos aleatórios
+[x] Tráfego de 54 carros de estilos e cores aleatórios nas vias OSM.
+[ ] Pônei.
+[ ] Carrinho de supermercado.
+[ ] Touro mecânico.
+
+Personagem
+[ ] Magia — ainda sem mecânica, efeitos ou controles definidos.
+[ ] “livroPAD” — pendente de definição do comportamento desejado.
+
+Cenário e conteúdo
+[~] Interiores funcionais — há espaços e terminais internos, incluindo o
+    pregão da bolsa; ainda não existe um sistema geral de interiores.
+[x] NPCs — pedestres, polícia, guardas, VIPs e Presidente.
+[x] Curiosidades e pontos de interesse — POIs OSM, aeroporto, autódromo,
+    estabelecimentos e instalações do jogo.
+[~] Eventos — eventos da economia, corridas e marcos de progresso; falta um
+    sistema geral de eventos do mundo.
+
+Mecânicas
+[ ] Estacionamento com ticket e cancela, incluindo pagamento/carimbo na saída.
+[x] Controles de teclado/mouse e joystick — mapeamento visível no menu inicial;
+    ações rebindáveis no menu de pausa.
+
+Auditoria Godot 4.7.2: mapa GMC, colisões, movimento, terreno natural,
+capivara, ragdoll e tela de controles executaram sem falhas após corrigir o
+spawn do teste de morte para usar a altura real do terreno.

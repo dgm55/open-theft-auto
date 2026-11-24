@@ -1,0 +1,38 @@
+LICENSE - Noduo Games – Free Sample Pack
+Copyright (c) 2026 PAUL BREMOND SAS (France). All rights reserved except as granted below.
+
+1. GRANT. PAUL BREMOND SAS grants the buyer (one person or one company) a non-exclusive, worldwide, perpetual license
+   to use, modify and integrate these files in games, apps, interactive experiences, videos, renders and other
+   end products, including commercial ones.
+
+2. NOT ALLOWED. You may not resell, share, give away, redistribute or sublicense the files themselves, raw or
+   modified, alone or as part of another asset pack, model library, marketplace listing, template or NFT, and you
+   may not use them to build an AI training dataset. Inside a game or app the files must be embedded so that end
+   users cannot extract and reuse them as stand-alone assets.
+
+3. NON-EXCLUSIVE. The same files are sold to other buyers. Because the base models are AI-generated, similar
+   models may exist elsewhere: no exclusivity or uniqueness is promised.
+
+4. AI DISCLOSURE. The base models (and textures) were generated with Meshy AI (meshy.ai) on a paid commercial
+   plan, which gives PAUL BREMOND SAS ownership of the outputs. The topology comes from Meshy's automatic remesh;
+   LODs, collisions, scale, materials, texture sets and engine exports were then made in our own pipeline. PROVENANCE.csv lists, for every model,
+   the Meshy task IDs, their dates and the paid plan active on that date. Do not present these files as created
+   without AI.
+
+5. MARKETPLACE LICENSE. If the marketplace you obtained these files from provides its own end-user license for
+   the assets (for example the Unity Asset Store EULA or the Fab Standard License), that license governs your use
+   and this file only adds provenance information and the restrictions it does not contradict. Otherwise (for
+   example a purchase on itch.io or Gumroad, or a direct sale), this file is the license granted to you.
+
+6. NO WARRANTY. The files are provided "as is", without warranty of any kind. PAUL BREMOND SAS's liability is limited
+   to the price paid for the files. Do not use them to depict real people, brands or trademarks.
+
+7. LAW. This license is governed by French law. The English text prevails over any translation.
+
+---
+Resume (FR) : licence NON EXCLUSIVE de PAUL BREMOND SAS pour utiliser et modifier ces fichiers dans des jeux et autres
+projets, y compris commerciaux. Interdit : revendre, partager ou redistribuer les fichiers eux-memes (bruts ou
+modifies), ou s'en servir pour entrainer une IA. Modeles de base generes par IA (Meshy, plan payant), retravailles
+dans notre chaine ; preuves dans PROVENANCE.csv. Si la boutique fournit sa propre licence d'utilisation
+(Unity Asset Store, Fab), elle prime ; sinon (itch.io, Gumroad, vente directe) cette licence s'applique.
+Droit francais ; le texte anglais fait foi.

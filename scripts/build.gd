@@ -53,6 +53,24 @@ static func pbr(asset: String, tint := Color.WHITE, scale_m := 0.8) -> StandardM
 	_surface_cache[key] = material
 	return material
 
+static func ground() -> StandardMaterial3D:
+	if _surface_cache.has("ground"):
+		return _surface_cache.ground
+	var material := mat(Color.WHITE, 0.95)
+	material.albedo_texture = load(
+		"res://assets/textures/ground/ground037_alb_ht.png") as Texture2D
+	material.normal_enabled = true
+	material.normal_texture = load(
+		"res://assets/textures/ground/ground037_nrm_rgh.png") as Texture2D
+	material.normal_scale = 0.35
+	material.roughness_texture = material.normal_texture
+	material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_ALPHA
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	material.vertex_color_use_as_albedo = true
+	material.vertex_color_is_srgb = true
+	_surface_cache.ground = material
+	return material
+
 static func facade(color: Color, style := "stucco") -> Material:
 	if style == "brick":
 		return pbr("Bricks051", Color.WHITE.lerp(color, 0.2), 0.8)

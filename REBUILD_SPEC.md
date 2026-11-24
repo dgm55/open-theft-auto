@@ -1,11 +1,14 @@
 # Open Theft Auto — Exhaustive Feature Inventory / Rebuild Spec
 
 Everything in this repo, distilled for a from-scratch rebuild. Source: Godot 4.7, pure
-GDScript (~19,400 lines under `scripts/`), no build step. All world geometry is
-procedural except 9 licensed glTF assets (cars, aircraft, shuttle, spacecraft, 5 human
-rigs). Movement/collision is **pure kinematic AABB** (custom `collides_at` test, no
-physics bodies) — the only Godot-physics object in the game is the Moon's trimesh
-collider for the buggy/spacecraft.
+GDScript (~19,400 lines under `scripts/`), no build step. The urban map uses
+expanded OSM vectors and a cropped SRTM height grid; procedural residential
+infill supplements missing building footprints. The supplied `GMC/map.glb`
+is retained as a coordinate reference, with its flat overlays hidden.
+Surrounding facilities remain game-built. Movement/collision is
+**pure kinematic AABB** (custom `collides_at` test, no physics bodies) — the
+only Godot-physics object in the game is the Moon's trimesh collider for the
+buggy/spacecraft.
 
 **Authorized local addition (2026-10-14):** the player may use a bounded
 `PhysicalBoneSimulator3D` death ragdoll while on foot. It is created only after
@@ -24,13 +27,14 @@ authorization.
 - **Autoload singletons (order matters):** `GameState`, `Forbes`, `Ventures`, `InputConfig`, `AudioFX`, `Gamepad`, `StockMarket`, `Garage`, `RaceManager`, `SaveGame`.
 - **Frame step:** `dt = min(0.05, delta)`. Game clock: `time_min += dt*0.5`, wraps 1440 (full day ≈ 48 real min, starts at noon = 720).
 - **All UI is procedural GDScript Control trees** — no .tscn UI, no Theme resource; consistent palette (off-white `#e8e6e0`, steel `#8c9bab`, gold `#c2a05a`, money green `#84a85f`, danger `#c8534a`, panel bg ~`rgb(.075,.085,.10)`).
-- Test harness: `tests/world_collision_audit.gd` — headless boot, asserts every road centreline walkable, shorelines wade-able, deep water blocked, causeway open, no oversized colliders. Prints `WORLD_COLLISION_AUDIT_OK buildings=N`.
+- Test harnesses: `tests/world_collision_audit.gd` (OSM roads, collisions and shoreline), `tests/gmc_map_audit.gd` (map layers, OSM features and tree scatter), `tests/capybara_pet_audit.gd` (game-start companion and follow), plus the movement and ragdoll audits.
+- Enabled editor addons: Road Generator 0.9.5 (supplemental road authoring; not the active traffic/map source) and EZTree (procedural runtime trees and editor painting tool).
 - Landing page: `site/index.html` (static marketing page, deployed to Vercel).
 - Naming quirk shipped in product: boot screen says "GTA VI / FREE HARBOR · 3D · 2026"; project + site say "Open Theft Auto".
 
 ---
 
-## 2. Procedural world (`world.gd`, 3,981 lines)
+## 2. Game world (`world.gd`)
 
 ### Scale constants
 | Constant | Value |
@@ -40,19 +44,19 @@ authorization.
 | ROAD_W | 15 m |
 | WORLD (city core) | 416 m square (half 208) |
 | Wilderness outer ring | half 458 |
-| LAND_HALF (coastline) | 838 (code comment says 806 — trust arithmetic) |
+| LAND_HALF (coastline) | 806 |
 | MOON_Y | 4,000 m above city |
 
 ### City
-- Road grid: 14 N-S strips + 14 E-W (E-W gapped over river, carried by bridges). Layered heights 0–0.13 to prevent z-fighting; textured asphalt + footpath (sidewalk = road+14 wide).
-- **Districts** per block by radius: `d<60` downtown (1–3 towers, w/d 6–14, h 45–110, blue-grey palette), `d<122` commercial (2–3 blocks, h 10–40, LA stucco creams), else residential villas. Fixed park blocks (6,5),(5,9),(4,7). Fixed landmark blocks: exchange (6,6), dealership (6,7), Stark lab (5,6), realtor (7,6), hospital (5,7), Angel Ventures (7,7).
-- **Building grammar:** plinth base, brick/stucco shader facades (world-space UV), corner piers, floor bands, roof slab + water tank or solar panel, door + canopy; ≥28 m glazed podium; ≥18 m curtain-wall mullions (MultiMesh). Windows: 0.8×1.4 quads, 82% spawn, single emissive **MultiMesh** (one draw call), energy animated day→night.
-- **Villas:** lawn 18×16, driveway, stucco body, gable tiled roof, framed windows, porch, attached garage, fenced recessed pool, perimeter fence, shrubs.
-- **Parks:** lawn, circular pond (animated water shader), cross paths, 11 trees.
-- **River:** x = −64, half-width 8; recessed bed, water plane, rocks/reeds/nav markers; 14 bridges (deck h 4.2, 16 m ramps, pylons, railings) — `surface_height` lifts entities onto decks.
-- **Docks:** 5 piers (walkable rects over water, deck y 0.55), boat boarding points.
-- Suburbs ring: up to 72 procedural houses (rotated lots, chimneys, mailboxes, hedges, 58% garages). Outer landscape: ~220 trees/rocks. 44 beach palms + 110 city trees. 45 drifting cloud clusters (y 55–90).
-- Street lamps: checkerboard over intersections (~72), emissive bulb + OmniLight (range 18), lit at night.
+- The city covers the supplied Manoel Honório / Juiz de Fora region. `GMC/map.glb` remains a reference for the original projection; its imported line, surface and building overlays are hidden.
+- `GMC/map_expanded.osm` provides projected street segments, exact mapped building footprints, waterway checks, green areas and named places. Roads are rebuilt as terrain-following asphalt/sidewalk meshes; traffic, minimap and collision use the same road network.
+- The expanded OSM extract contains 488 drivable ways and 12 mapped building ways. Up to 1,600 deterministic low-rise houses are inferred along local residential streets, with up to 70 mid-rise blocks beside primary/secondary roads; these are visual/gameplay infill, not surveyed locations.
+- `GMC/elevation_srtm.csv` is a 45×45 crop of 1-arc-second SRTM elevations. It drives the visible terrain and walkable height; city landmarks, traffic, pedestrians, collision bounds and vegetation are aligned to the sampled ground.
+- Street View was consulted qualitatively around Av. Gov. Valadares, R. Ewbanck da Câmara and R. Américo Lôbo to calibrate street/sidewalk and building-height proportions. No Google imagery or image-derived building geometry is distributed.
+- Closed OSM parks, gardens, grass and woodland areas receive deterministic EZTree instances. Placement is bounded and filters roads, buildings and water; the generated variants are grouped into MultiMeshes.
+- The stock, vehicle, suit, realtor, hospital and venture locations remain procedural gameplay landmarks, placed on the imported street layout. Four purchaseable safehouses remain generated outside the mapped building footprints.
+- The prior 13×13 procedural street grid and its district buildings are retained as an inactive fallback path; they are not generated in the current world.
+- The surrounding terrain, airport, President's estate, F1 circuit, wilderness facility, island project and Moon remain procedural game areas.
 
 ### Landmarks (each with an interaction kiosk: pedestal + emissive monitor + Label3D prompt)
 - **Free Harbor Exchange** — brick tower h 66, emissive bands, sign, 2 Forbes banners. Hidden **glass trading-floor penthouse** at y 66.4 (revealed on entry; altitude-gated collision so ground still works below) with desks, 14 glowing monitors, lounge, EXIT pad.
@@ -86,7 +90,13 @@ Fenced compound 180×150 (gate on south side, "RESTRICTED AREA" board, dirt appr
 Cost **$500B** at City Planning kiosk (double-press E within 6 s to sign). Pre-built in 3 hidden stages toggled by `island_stage`: 1 construction (pilings, cranes, barge) → 2 cable-stay bridge → 3 finished district (marina hotel tower h 74, casino + gold dome, shops, lighthouse, palms, sign). Builds in real time (~5 min); walkable + solid only at stage 3.
 
 ### Collision contract
-`collides_at(x, z, r=0.5, altitude)` — spatial hash (24 m cells) over AABB list `{x,z,w,d,h}` (+ optional yaw/round); altitude gating frees fliers above rooftops; whitelisted walkable zones (docks, causeways, airfield, estate, facility, island); water blocks: river channel below bridge height, deep sea, world edge = coastline. `surface_height` lifts onto bridges/docks/trading floor. `find_safe_spawn()` spiral search.
+`collides_at(x, z, r=0.5, altitude)` — spatial hash (24 m cells) over
+AABB list `{x,z,w,d,h,base_y}` (+ optional yaw/round), including OSM and
+procedural infill buildings; altitude gating frees fliers above rooftops;
+whitelisted walkable
+zones include causeways, airfield, estate, facility and island. OSM waterways
+and deep sea block ground movement. `find_safe_spawn()` remains a spiral
+search.
 
 ---
 
@@ -95,6 +105,7 @@ Cost **$500B** at City Planning kiosk (double-press E within 6 s to sign). Pre-b
 ### On foot
 - Walk 4.5, sprint 8.0 m/s; accel `move_toward(…, 50*dt)`; yaw lerp `dt*14`; no jump. Moon: 2.9 / 4.6 m/s with floaty bob. Collision radius ~0.4.
 - Player model: rigged glTF "Peter" (clothed), weapon prop bone-attached to right hand.
+- A procedural capybara companion spawns with a new game, follows on foot using the same walkable-height and map-collision queries, and hides while the player is in a vehicle, parachuting, suited, or above ground-level interiors.
 - Passive regen +4 HP/s when wanted = 0. `restock_respawn` (R): alive = full HP + ammo; dead = respawn.
 - **Death:** all liquid cash → 0 (bank + assets survive); if killed by a Forbes rival's guard, that rival inherits the cash. Respawn at active safehouse (else safe spot), wanted cleared, HP full.
 
@@ -243,7 +254,7 @@ Catmull-Rom loop through the wilderness, 21 control nodes, width 16 (+6 corner w
 ## 11. UI screens
 
 - **Boot:** big title, CONTINUE/NEW GAME (save-aware) or PRESS START, full controls legend, gamepad focus seeded.
-- **HUD:** money, 5-star wanted widget, REP/MOOD pip meters, waypoint text (President when motorcade out, else AIRPORT + distance + 8-way compass), clock, HP/armour bars, weapon + ammo, **semicircular speedometer** (needle, redline last 18%, digital km/h) for ground vehicles / ALT for aircraft, **228 px minimap** (water/land/beach/river/grid/islands/causeways, landmark dots, pulsing President blip, player arrow, 1080 m span), race panel (position/lap/time/best/drift), spacecraft nav panel, **stacked toasts** (max 5, newest at bottom, emoji icon extraction, good/bad accent inference, fade in/hold/out), sniper scope overlay, **WASTED** death screen, **CITY OWNED** victory banner (8 s fade).
+- **HUD:** money, 5-star wanted widget, REP/MOOD pip meters, waypoint text (President when motorcade out, else AIRPORT + distance + 8-way compass), clock, HP/armour bars, weapon + ammo, **semicircular speedometer** (needle, redline last 18%, digital km/h) for ground vehicles / ALT for aircraft, **228 px minimap** (OSM roads and waterways, land/sea, game-built airport and estate islands, causeways, landmark dots, pulsing President blip, player arrow, 1080 m span), race panel (position/lap/time/best/drift), spacecraft nav panel, **stacked toasts** (max 5, newest at bottom, emoji icon extraction, good/bad accent inference, fade in/hold/out), sniper scope overlay, **WASTED** death screen, **CITY OWNED** victory banner (8 s fade).
 - **Pause menu:** PAUSED → Resume / Controls / Exit (saves). Controls screen: scrollable grouped action list with keycap chips (kb + pad per action), press-to-capture rebinding with pulsing prompt, reset-to-defaults, fixed-controls legend, and a **live drawn DualSense diagram** (body silhouette, all buttons, leader-line labels that re-resolve current bindings in teal, "(unassigned)" states).
 - **Phone (P):** Call sports car / Call F1 · Fast travel: Airport, Exchange, Launch pad · Full heal+ammo · **Bribe cops $50,000** (wanted→0).
 - **Touch HUD (mobile only):** dynamic left-half joystick (radius 110, sprint at >0.85 magnitude), right-half drag look, FIRE/E/F/V circle buttons, hidden under overlays.
@@ -267,3 +278,18 @@ Sun rotates with game clock; energy/colour warm→cool; opposing moon light; fog
 ## 13. Third-party assets (all fitted in code; everything else procedural)
 
 McLaren MCL35M (CC-BY) · Quaternius Universal Base Characters (CC0) · "Indian Man in suit" VIP (CC-BY) · "Man Dressed In Suit" guards (CC-BY) · Renderpeople "Nathan" w/ mocap walk (CC-BY) · Spider-Man "Peter" player model (CC-BY) · Boeing 787 (CC-BY) · UH-60M Black Hawk (CC-BY) · Space Shuttle w/ boosters (Sketchfab Standard) · Class-3 fighter spaceship "Hodbin" (Sketchfab Standard) · CC0 gunshot samples. MIT-licensed project.
+
+## 14. `GMCespecs.txt` implementation status
+
+| Requested item | Current status |
+|---|---|
+| Capybara / pets | Implemented as one procedural capybara companion. A generic pet/adoption system is not included. |
+| Maryland City map | Pending source data. The supplied GMC files map Manoel Honório, Juiz de Fora; they are not Maryland City data. |
+| Random vehicles | Already present: 54 ambient cars use random styles/colors and spawn from OSM roads. |
+| Pony | Pending a model and gameplay behavior. |
+| Shopping cart | Pending a defined interaction/control model; no dedicated asset is included. |
+| Mechanical bull | Pending a defined ride/gameplay loop; no dedicated asset is included. |
+| Magic / “livroPAD” | Not implemented: the requested terms do not yet define an action, controls, or gameplay result. |
+| Functional interiors | Existing enterable/walkable spaces include the exchange trading floor, airport terminal and space-facility hangar. |
+| NPCs | Already present: pedestrians, police/SWAT, VIPs/bodyguards, Forbes rivals and the President's detail. |
+| Points of interest / events | OSM names and mapped places are labeled; the project already has the Grand Prix, President's motorcade/endgame, wealth milestones and economy events. |

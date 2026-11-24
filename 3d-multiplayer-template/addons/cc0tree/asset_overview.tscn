@@ -1,0 +1,595 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/cc0tree/asset_overview.gd" id="1_7rhlx"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_AbstractZeusSculpture.fbx" id="2_n4xcm"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Airplane.fbx" id="3_8ppjb"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_BaseballBat.fbx" id="4_ncku2"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Bowling_Ball.fbx" id="5_j0kmv"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Bowling_Pin.fbx" id="6_3yjex"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_CombatKnife.fbx" id="7_prv4t"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_ComputerTower.fbx" id="8_7wwsg"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_CrowBar.fbx" id="9_6p6pw"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_DeadPineTree.fbx" id="10_1iqcj"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_FireAxe.fbx" id="11_o7tfv"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Flashlight.fbx" id="12_lt6vx"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Grenade_Pineapple.fbx" id="13_y7ga5"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_HammerClaw.fbx" id="14_7fmcl"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_HandBomb.fbx" id="15_8s4hs"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_JerryCan.fbx" id="16_lq5gn"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Medkit.fbx" id="17_extol"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Molotov.fbx" id="18_lf8bu"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_OilBarrel.fbx" id="19_dlmt4"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Pine_Tree.fbx" id="20_5hmeq"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Red_Pen.fbx" id="21_ottus"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Screwdriver.fbx" id="22_yx4qj"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Sword_1_Shortsword.fbx" id="23_322pk"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Sword_2_Katana.fbx" id="24_huxn4"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_TrashCan.fbx" id="25_mxqva"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Tree_Rounded.fbx" id="26_c76ft"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_WateringCan.fbx" id="27_qq8d7"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_WoodenBox.fbx" id="28_uroq1"]
+[ext_resource type="PackedScene" path="res://addons/cc0tree/models/SM_Wrench.fbx" id="29_ew32g"]
+
+[sub_resource type="Environment" id="Environment_0da5i"]
+background_mode = 1
+background_color = Color(0.09, 0.14, 0.13, 1)
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
+
+[node name="AssetOverview" type="Node3D" unique_id=1623396430]
+script = ExtResource("1_7rhlx")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=262171504]
+environment = SubResource("Environment_0da5i")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1602295881]
+transform = Transform3D(0.81915206, -0.4055798, 0.4055798, 0, 0.70710677, 0.70710677, -0.57357645, -0.579228, 0.579228, 0, 0, 0)
+light_energy = 0.45
+
+[node name="FillLight" type="DirectionalLight3D" parent="." unique_id=328470284]
+transform = Transform3D(-0.76604444, 0.21984631, -0.6040228, 0, 0.9396926, 0.34202012, 0.64278764, 0.26200262, -0.7198463, 0, 0, 0)
+light_energy = 0.2
+
+[node name="GridRoot" type="Node3D" parent="." unique_id=630589476]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.3, 0, -4.95)
+
+[node name="AbstractZeusSculpture" type="Node3D" parent="GridRoot" unique_id=807113853]
+
+[node name="SM_AbstractZeusSculpture" type="Node3D" parent="GridRoot/AbstractZeusSculpture" unique_id=1039815076 instance=ExtResource("2_n4xcm")]
+transform = Transform3D(2.6666667, 0, 0, 0, 2.6666667, 0, 0, 0, 2.6666667, 0, 3.7956735e-08, 9.934108e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/AbstractZeusSculpture" unique_id=386251637]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Abstract Zeus Sculpture"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="Airplane" type="Node3D" parent="GridRoot" unique_id=942705002]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.1, 0, 0)
+
+[node name="SM_Airplane" type="Node3D" parent="GridRoot/Airplane" unique_id=709707452 instance=ExtResource("3_8ppjb")]
+transform = Transform3D(0.16790348, 0, 0, 0, 0.16790348, 0, 0, 0, 0.16790348, 0, 6.864191e-08, 0)
+
+[node name="Name" type="Label3D" parent="GridRoot/Airplane" unique_id=2099827632]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Airplane"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="BaseballBat" type="Node3D" parent="GridRoot" unique_id=1181605399]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.2, 0, 0)
+
+[node name="SM_BaseballBat" type="Node3D" parent="GridRoot/BaseballBat" unique_id=1386839251 instance=ExtResource("4_ncku2")]
+transform = Transform3D(1.8823532, 0, 0, 0, 1.8823532, 0, 0, 0, 1.8823532, 0, 1.1689474e-08, 9.8172364e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/BaseballBat" unique_id=738625968]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Baseball Bat"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="BowlingBall" type="Node3D" parent="GridRoot" unique_id=115055396]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.3, 0, 0)
+
+[node name="SM_Bowling_Ball" type="Node3D" parent="GridRoot/BowlingBall" unique_id=237892058 instance=ExtResource("5_j0kmv")]
+transform = Transform3D(7.272727, 0, 0, 0, 7.272727, 0, 0, 0, 7.272727, 0, 9.5367426e-08, 1.0837208e-07)
+
+[node name="Name" type="Label3D" parent="GridRoot/BowlingBall" unique_id=1942060635]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Bowling Ball"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="BowlingPin" type="Node3D" parent="GridRoot" unique_id=220892677]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.4, 0, 0)
+
+[node name="SM_Bowling_Pin" type="Node3D" parent="GridRoot/BowlingPin" unique_id=1769378059 instance=ExtResource("6_3yjex")]
+transform = Transform3D(4.2105265, 0, 0, 0, 4.2105265, 0, 0, 0, 4.2105265, 0, 2.9744914e-08, 1.2548347e-07)
+
+[node name="Name" type="Label3D" parent="GridRoot/BowlingPin" unique_id=603880785]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Bowling Pin"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="CombatKnife" type="Node3D" parent="GridRoot" unique_id=1738334831]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.5, 0, 0)
+
+[node name="SM_CombatKnife" type="Node3D" parent="GridRoot/CombatKnife" unique_id=277359058 instance=ExtResource("7_prv4t")]
+transform = Transform3D(5.3333335, 0, 0, 0, 5.3333335, 0, 0, 0, 5.3333335, 0, 1.2366644e-08, 8.9406974e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/CombatKnife" unique_id=2094423791]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Combat Knife"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="ComputerTower" type="Node3D" parent="GridRoot" unique_id=1141184160]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.6, 0, 0)
+
+[node name="SM_ComputerTower" type="Node3D" parent="GridRoot/ComputerTower" unique_id=1863404901 instance=ExtResource("8_7wwsg")]
+transform = Transform3D(3.5555553, 0, 0, 0, 3.5555553, 0, 0, 0, 3.5555553, 0, 9.187311e-08, 1.0596381e-07)
+
+[node name="Name" type="Label3D" parent="GridRoot/ComputerTower" unique_id=178682808]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Computer Tower"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="CrowBar" type="Node3D" parent="GridRoot" unique_id=481103080]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3.3)
+
+[node name="SM_CrowBar" type="Node3D" parent="GridRoot/CrowBar" unique_id=1349819054 instance=ExtResource("9_6p6pw")]
+transform = Transform3D(2.1052632, 0, 0, 0, 2.1052632, 0, 0, 0, 2.1052632, 0, 8.452197e-09, 9.411261e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/CrowBar" unique_id=1543952730]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Crow Bar"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="DeadPineTree" type="Node3D" parent="GridRoot" unique_id=1532328043]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.1, 0, 3.3)
+
+[node name="SM_DeadPineTree" type="Node3D" parent="GridRoot/DeadPineTree" unique_id=430041169 instance=ExtResource("10_1iqcj")]
+transform = Transform3D(0.32000002, 0, 0, 0, 0.32000002, 0, 0, 0, 0.32000002, 0, 2.4878839e-08, 9.536744e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/DeadPineTree" unique_id=1741562650]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Dead Pine Tree"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="FireAxe" type="Node3D" parent="GridRoot" unique_id=371840275]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.2, 0, 3.3)
+
+[node name="SM_FireAxe" type="Node3D" parent="GridRoot/FireAxe" unique_id=1915935317 instance=ExtResource("11_o7tfv")]
+transform = Transform3D(1.7777779, 0, 0, 0, 1.7777779, 0, 0, 0, 1.7777779, 2.6490955e-08, 1.1913932e-08, 9.934109e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/FireAxe" unique_id=1178055759]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Fire Axe"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="Flashlight" type="Node3D" parent="GridRoot" unique_id=293876879]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.3, 0, 3.3)
+
+[node name="SM_Flashlight" type="Node3D" parent="GridRoot/Flashlight" unique_id=1260335029 instance=ExtResource("12_lt6vx")]
+transform = Transform3D(6.4000006, 0, 0, 0, 6.4000006, 0, 0, 0, 6.4000006, 0, 3.6508972e-08, 9.536744e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/Flashlight" unique_id=1703962370]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Flashlight"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="GrenadePineapple" type="Node3D" parent="GridRoot" unique_id=1708345173]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.4, 0, 3.3)
+
+[node name="SM_Grenade_Pineapple" type="Node3D" parent="GridRoot/GrenadePineapple" unique_id=930618311 instance=ExtResource("13_y7ga5")]
+transform = Transform3D(12.307693, 0, 0, 0, 12.307693, 0, 0, 0, 12.307693, 0, 7.188108e-08, 9.1699455e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/GrenadePineapple" unique_id=1835269641]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Grenade Pineapple"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="HammerClaw" type="Node3D" parent="GridRoot" unique_id=1883611884]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.5, 0, 3.3)
+
+[node name="SM_HammerClaw" type="Node3D" parent="GridRoot/HammerClaw" unique_id=1713389884 instance=ExtResource("14_7fmcl")]
+transform = Transform3D(4.848485, 0, 0, 0, 4.848485, 0, 0, 0, 4.848485, 0, 1.3511204e-08, 9.0310074e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/HammerClaw" unique_id=136924285]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Hammer Claw"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="HandBomb" type="Node3D" parent="GridRoot" unique_id=230972775]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.6, 0, 3.3)
+
+[node name="SM_HandBomb" type="Node3D" parent="GridRoot/HandBomb" unique_id=285203006 instance=ExtResource("15_8s4hs")]
+transform = Transform3D(5.7142863, 0, 0, 0, 5.7142863, 0, 0, 0, 5.7142863, -4.257475e-08, 7.590213e-08, 8.51495e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/HandBomb" unique_id=1278860116]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Hand Bomb"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="JerryCan" type="Node3D" parent="GridRoot" unique_id=66858200]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 6.6)
+
+[node name="SM_JerryCan" type="Node3D" parent="GridRoot/JerryCan" unique_id=667526477 instance=ExtResource("16_lq5gn")]
+transform = Transform3D(3.478261, 0, 0, 0, 3.478261, 0, 0, 0, 3.478261, 0, 2.8830028e-08, 7.774519e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/JerryCan" unique_id=1999962111]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Jerry Can"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="Medkit" type="Node3D" parent="GridRoot" unique_id=304197987]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.1, 0, 6.6)
+
+[node name="SM_Medkit" type="Node3D" parent="GridRoot/Medkit" unique_id=1777475993 instance=ExtResource("17_extol")]
+transform = Transform3D(5.893772, 0, 0, 0, 5.893772, 0, 0, 0, 5.893772, 0, 4.918165e-08, 1.3173607e-07)
+
+[node name="Name" type="Label3D" parent="GridRoot/Medkit" unique_id=229571090]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Medkit"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="Molotov" type="Node3D" parent="GridRoot" unique_id=994066670]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.2, 0, 6.6)
+
+[node name="SM_Molotov" type="Node3D" parent="GridRoot/Molotov" unique_id=842476527 instance=ExtResource("18_lf8bu")]
+transform = Transform3D(5.333334, 0, 0, 0, 5.333334, 0, 0, 0, 5.333334, 0, 2.5503653e-08, 9.9341094e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/Molotov" unique_id=988128770]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Molotov"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="OilBarrel" type="Node3D" parent="GridRoot" unique_id=1666115166]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.3, 0, 6.6)
+
+[node name="SM_OilBarrel" type="Node3D" parent="GridRoot/OilBarrel" unique_id=686721762 instance=ExtResource("19_dlmt4")]
+transform = Transform3D(1.7777776, 0, 0, 0, 1.7777776, 0, 0, 0, 1.7777776, 0, 6.487997e-08, 1.059638e-07)
+
+[node name="Name" type="Label3D" parent="GridRoot/OilBarrel" unique_id=310415368]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Oil Barrel"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="PineTree" type="Node3D" parent="GridRoot" unique_id=1123919496]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.4, 0, 6.6)
+
+[node name="SM_Pine_Tree" type="Node3D" parent="GridRoot/PineTree" unique_id=1065483476 instance=ExtResource("20_5hmeq")]
+transform = Transform3D(0.26666665, 0, 0, 0, 0.26666665, 0, 0, 0, 0.26666665, 0, 8.844655e-08, 6.3578284e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/PineTree" unique_id=212760768]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Pine Tree"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="RedPen" type="Node3D" parent="GridRoot" unique_id=2030328212]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.5, 0, 6.6)
+
+[node name="SM_Red_Pen" type="Node3D" parent="GridRoot/RedPen" unique_id=1340745 instance=ExtResource("21_ottus")]
+transform = Transform3D(10.666667, 0, 0, 0, 10.666667, 0, 0, 0, 10.666667, 0, 1.4839484e-08, 8.9406974e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/RedPen" unique_id=1690257218]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Red Pen"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="Screwdriver" type="Node3D" parent="GridRoot" unique_id=717755799]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.6, 0, 6.6)
+
+[node name="SM_Screwdriver" type="Node3D" parent="GridRoot/Screwdriver" unique_id=2085529097 instance=ExtResource("22_yx4qj")]
+transform = Transform3D(6.4000006, 0, 0, 0, 6.4000006, 0, 0, 0, 6.4000006, 0, 1.3324517e-08, 9.536744e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/Screwdriver" unique_id=254427909]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Screwdriver"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="Sword1Shortsword" type="Node3D" parent="GridRoot" unique_id=179343318]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 9.9)
+
+[node name="SM_Sword_1_Shortsword" type="Node3D" parent="GridRoot/Sword1Shortsword" unique_id=435950615 instance=ExtResource("23_322pk")]
+transform = Transform3D(2.1333334, 0, 0, 0, 2.1333334, 0, 0, 0, 2.1333334, 0, 8.903115e-09, 9.536744e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/Sword1Shortsword" unique_id=2016043844]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Sword 1 Shortsword"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="Sword2Katana" type="Node3D" parent="GridRoot" unique_id=815212109]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.1, 0, 9.9)
+
+[node name="SM_Sword_2_Katana" type="Node3D" parent="GridRoot/Sword2Katana" unique_id=863261909 instance=ExtResource("24_huxn4")]
+transform = Transform3D(1.6000001, 0, 0, 0, 1.6000001, 0, 0, 0, 1.6000001, 0, 8.183746e-09, 9.536744e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/Sword2Katana" unique_id=663157163]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Sword 2 Katana"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="TrashCan" type="Node3D" parent="GridRoot" unique_id=1954312480]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.2, 0, 9.9)
+
+[node name="SM_TrashCan" type="Node3D" parent="GridRoot/TrashCan" unique_id=1069503296 instance=ExtResource("25_mxqva")]
+transform = Transform3D(2.2857141, 0, 0, 0, 2.2857141, 0, 0, 0, 2.2857141, 0, 7.816097e-08, 6.811959e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/TrashCan" unique_id=1480623876]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Trash Can"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="TreeRounded" type="Node3D" parent="GridRoot" unique_id=1244352635]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.3, 0, 9.9)
+
+[node name="SM_Tree_Rounded" type="Node3D" parent="GridRoot/TreeRounded" unique_id=139819550 instance=ExtResource("26_c76ft")]
+transform = Transform3D(0.35555556, 0, 0, 0, 0.35555556, 0, 0, 0, 0.35555556, 0, 6.409888e-08, 8.477105e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/TreeRounded" unique_id=169717419]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Tree Rounded"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="WateringCan" type="Node3D" parent="GridRoot" unique_id=371807711]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.4, 0, 9.9)
+
+[node name="SM_WateringCan" type="Node3D" parent="GridRoot/WateringCan" unique_id=988917537 instance=ExtResource("27_qq8d7")]
+transform = Transform3D(2.6168447, 0, 0, 0, 2.6168447, 0, 0, 0, 2.6168447, 0, 4.2147224e-08, 3.8994024e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/WateringCan" unique_id=1351265262]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Watering Can"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="WoodenBox" type="Node3D" parent="GridRoot" unique_id=261670735]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.5, 0, 9.9)
+
+[node name="SM_WoodenBox" type="Node3D" parent="GridRoot/WoodenBox" unique_id=1183346273 instance=ExtResource("28_uroq1")]
+transform = Transform3D(2.6666663, 0, 0, 0, 2.6666663, 0, 0, 0, 2.6666663, 0, 9.536742e-08, 7.947285e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/WoodenBox" unique_id=461559066]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Wooden Box"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="Wrench" type="Node3D" parent="GridRoot" unique_id=459798815]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.6, 0, 9.9)
+
+[node name="SM_Wrench" type="Node3D" parent="GridRoot/Wrench" unique_id=8515920 instance=ExtResource("29_ew32g")]
+transform = Transform3D(6.399999, 0, 0, 0, 6.399999, 0, 0, 0, 6.399999, 0, 5.1344564e-09, 9.536742e-08)
+
+[node name="Name" type="Label3D" parent="GridRoot/Wrench" unique_id=345699480]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0.35)
+pixel_size = 0.0066
+billboard = 1
+no_depth_test = true
+text = "Wrench"
+font_size = 48
+outline_size = 10
+vertical_alignment = 0
+autowrap_mode = 3
+width = 400.0
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=867090795]
+transform = Transform3D(1, 0, 0, 0, 0.61566144, 0.7880106, 0, -0.7880106, 0.61566144, 0, 31.520432, 24.626461)
+projection = 1
+current = true
+size = 25.0
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=379349272]
+
+[node name="TitleLabel" type="Label" parent="UI" unique_id=445474833]
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 24.0
+offset_bottom = 74.0
+theme_override_font_sizes/font_size = 34
+text = "All models"
+horizontal_alignment = 1
+
+[node name="CountLabel" type="Label" parent="UI" unique_id=418050025]
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 70.0
+offset_bottom = 100.0
+theme_override_colors/font_color = Color(1, 1, 1, 0.6)
+text = "28 models"
+horizontal_alignment = 1
+
+[node name="HintLabel" type="Label" parent="UI" unique_id=1363463154]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -72.0
+offset_bottom = -16.0
+theme_override_colors/font_color = Color(1, 1, 1, 0.55)
+text = "Tab: turntable view
+CC0Tree · free CC0 low-poly assets · skywolfgamestudios.github.io/CC0Tree"
+horizontal_alignment = 1

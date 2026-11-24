@@ -15,8 +15,13 @@ const FAINT := Color(0.55, 0.57, 0.6)
 const BTN_BG := Color("23262b")      # dark button fill
 const PANEL_BG := Color(0.055, 0.06, 0.07, 0.82)
 const PANEL_EDGE := Color(0.55, 0.6, 0.65, 0.32)
+const BOOT_BACKGROUND: Texture2D = preload("res://assets/textures/menu_city_background.png")
 
 var _boot: Control
+var _boot_menu: Control
+var _boot_controls: Control
+var _menu_font: Font
+var _graffiti_font: Font
 var _hud: Control
 var _death: Control
 var _victory: Control
@@ -117,6 +122,8 @@ class Minimap extends Control:
 	var pa := false              # President's motorcade is out
 	var pgx := 0.0
 	var pgz := 0.0
+	var roads: Array[Dictionary] = []
+	var waterways: Array[Dictionary] = []
 
 	const ROAD := Color(0.30, 0.31, 0.35)
 	const GRASS := Color(0.30, 0.39, 0.24)
@@ -134,6 +141,11 @@ class Minimap extends Control:
 		pgx = x
 		pgz = z
 
+	func set_roads(segments: Array[Dictionary], water_segments: Array[Dictionary]) -> void:
+		roads = segments
+		waterways = water_segments
+		queue_redraw()
+
 	func _span() -> float:
 		return 1080.0           # wide enough to take in the bay, airport and estate
 
@@ -144,25 +156,37 @@ class Minimap extends Control:
 	func _draw() -> void:
 		var span := _span()
 		var wh: float = CityWorld.WORLD_HALF
-		# The bay fills the frame; landmasses sit on top.
-		draw_rect(Rect2(Vector2.ZERO, size), WATER)
-		# Mainland — wilderness and the city, everything north of the shoreline.
-		var land0 := _w2m(-span / 2.0, -span / 2.0)
-		var land1 := _w2m(span / 2.0, wh)
-		draw_rect(Rect2(land0, land1 - land0), GRASS)
-		# Beach strip along the south edge of the city.
-		var bs0 := _w2m(-wh, wh - 20.0)
-		var bs1 := _w2m(wh, wh)
-		draw_rect(Rect2(bs0, bs1 - bs0), SAND)
-		# River.
-		var rv0 := _w2m(CityWorld.RIVER_CX - CityWorld.RIVER_HALF, -wh)
-		var rv1 := _w2m(CityWorld.RIVER_CX + CityWorld.RIVER_HALF, wh)
-		draw_rect(Rect2(rv0, rv1 - rv0), WATER)
-		# Road grid.
-		for i in range(CityWorld.GRID + 1):
-			var g: float = -wh + i * CityWorld.BLOCK
-			draw_line(_w2m(g, -wh), _w2m(g, wh), ROAD, 1.5)
-			draw_line(_w2m(-wh, g), _w2m(wh, g), ROAD, 1.5)
+		if roads.is_empty():
+			draw_rect(Rect2(Vector2.ZERO, size), WATER)
+			var land0 := _w2m(-span / 2.0, -span / 2.0)
+			var land1 := _w2m(span / 2.0, wh)
+			draw_rect(Rect2(land0, land1 - land0), GRASS)
+			var bs0 := _w2m(-wh, wh - 20.0)
+			var bs1 := _w2m(wh, wh)
+			draw_rect(Rect2(bs0, bs1 - bs0), SAND)
+			var rv0 := _w2m(CityWorld.RIVER_CX - CityWorld.RIVER_HALF, -wh)
+			var rv1 := _w2m(CityWorld.RIVER_CX + CityWorld.RIVER_HALF, wh)
+			draw_rect(Rect2(rv0, rv1 - rv0), WATER)
+			for i in range(CityWorld.GRID + 1):
+				var g: float = -wh + i * CityWorld.BLOCK
+				draw_line(_w2m(g, -wh), _w2m(g, wh), ROAD, 1.5)
+				draw_line(_w2m(-wh, g), _w2m(wh, g), ROAD, 1.5)
+		else:
+			draw_rect(Rect2(Vector2.ZERO, size), GRASS)
+			var shore := _w2m(-span / 2.0, CityWorld.WORLD_HALF + 105.0)
+			draw_rect(Rect2(Vector2(0.0, shore.y),
+				Vector2(size.x, size.y - shore.y)), WATER)
+			draw_line(Vector2(0.0, shore.y), Vector2(size.x, shore.y), SAND, 1.5)
+			var road_lines := PackedVector2Array()
+			for segment in roads:
+				road_lines.append(_w2m(segment.from.x, segment.from.y))
+				road_lines.append(_w2m(segment.to.x, segment.to.y))
+			draw_multiline(road_lines, ROAD, 1.6, true)
+			var water_lines := PackedVector2Array()
+			for segment in waterways:
+				water_lines.append(_w2m(segment.from.x, segment.from.y))
+				water_lines.append(_w2m(segment.to.x, segment.to.y))
+			draw_multiline(water_lines, WATER, 2.4, true)
 		# Airport island and the President's estate island.
 		_landmass(CityWorld.AIRFIELD.x0, CityWorld.AIRFIELD.z0,
 			CityWorld.AIRFIELD.x1, CityWorld.AIRFIELD.z1)
@@ -191,6 +215,9 @@ class Minimap extends Control:
 		draw_colored_polygon(tri, Color("f4f4f0"))
 		draw_polyline(PackedVector2Array([tri[0], tri[1], tri[2], tri[0]]),
 			Color(0, 0, 0, 0.6), 1.0, true)
+		draw_string(ThemeDB.fallback_font, Vector2(5.0, size.y - 5.0),
+			"© OpenStreetMap contributors", HORIZONTAL_ALIGNMENT_LEFT, size.x - 10.0,
+			11, Color("f4f4f0"))
 
 	func _landmass(x0: float, z0: float, x1: float, z1: float) -> void:
 		var a := _w2m(x0, z0)
@@ -389,60 +416,271 @@ func _accent_button(text: String) -> Button:
 func _build_boot() -> void:
 	_boot = Control.new()
 	_boot.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_boot.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_boot)
-	var bg := ColorRect.new()
+	var bg := TextureRect.new()
+	bg.name = "MenuBackground"
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color("0c0d0f")
+	bg.texture = BOOT_BACKGROUND
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_boot.add_child(bg)
+	var shade := ColorRect.new()
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color(0.015, 0.022, 0.035, 0.58)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_boot.add_child(shade)
 
+	var menu_font := SystemFont.new()
+	menu_font.font_names = PackedStringArray(["Segoe UI Light", "Segoe UI", "Arial"])
+	_menu_font = menu_font
+	var graffiti_font := SystemFont.new()
+	graffiti_font.font_names = PackedStringArray(["Impact", "Arial Black", "Segoe UI Black"])
+	_graffiti_font = graffiti_font
+
+	_boot_menu = Control.new()
+	_boot_menu.name = "BootMenuView"
+	_boot_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_boot.add_child(_boot_menu)
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_boot.add_child(center)
+	_boot_menu.add_child(center)
 	var vb := VBoxContainer.new()
 	vb.alignment = BoxContainer.ALIGNMENT_CENTER
-	vb.add_theme_constant_override("separation", 16)
+	vb.add_theme_constant_override("separation", 18)
 	center.add_child(vb)
 
-	var title := _label("GTA VI", 124, TEXT)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var title := _graffiti_title()
 	vb.add_child(title)
-	var tag := _label("FREE HARBOR   ·   3D   ·   2026", 20, ACCENT)
+	var tag := _boot_label("OPEN THEFT AUTO  ·  GMC OPEN WORLD", 18, GOLD)
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(tag)
 
-	# Continue an existing save, or start fresh. With no save there's just one
-	# button (a fresh start).
+	var menu_buttons := VBoxContainer.new()
+	menu_buttons.add_theme_constant_override("separation", 10)
+	menu_buttons.custom_minimum_size.x = 390
 	if SaveGame.has_save():
-		var cont := _accent_button("CONTINUE")
-		cont.pressed.connect(func(): start_pressed.emit())
-		var cw := CenterContainer.new()
-		cw.add_child(cont)
-		vb.add_child(cw)
-		var ng := _accent_button("NEW GAME")
-		ng.pressed.connect(func(): new_game_pressed.emit())
-		var nw := CenterContainer.new()
-		nw.add_child(ng)
-		vb.add_child(nw)
+		var cont := _boot_button("CONTINUE")
+		cont.pressed.connect(func() -> void: start_pressed.emit())
+		menu_buttons.add_child(cont)
+		var ng := _boot_button("NEW GAME")
+		var new_game_confirmation := ConfirmationDialog.new()
+		new_game_confirmation.title = "Start a new game?"
+		new_game_confirmation.dialog_text = "This will replace the existing save. Continue?"
+		new_game_confirmation.ok_button_text = "NEW GAME"
+		new_game_confirmation.cancel_button_text = "CANCEL"
+		new_game_confirmation.confirmed.connect(func() -> void: new_game_pressed.emit())
+		_boot.add_child(new_game_confirmation)
+		ng.pressed.connect(func() -> void: new_game_confirmation.popup_centered())
+		menu_buttons.add_child(ng)
 	else:
-		var btn := _accent_button("PRESS START")
-		btn.pressed.connect(func(): start_pressed.emit())
-		var btn_wrap := CenterContainer.new()
-		btn_wrap.add_child(btn)
-		vb.add_child(btn_wrap)
-	# Give the boot buttons gamepad/keyboard focus — without it a controller
-	# player with a save could never pick NEW GAME (mouse-only button).
-	UiNav.apply.call_deferred(vb)
+		var btn := _boot_button("START GAME")
+		btn.pressed.connect(func() -> void: start_pressed.emit())
+		menu_buttons.add_child(btn)
+	var controls_btn := _boot_button("CONTROLS")
+	controls_btn.pressed.connect(_open_boot_controls)
+	menu_buttons.add_child(controls_btn)
+	var exit_btn := _boot_button("EXIT")
+	menu_buttons.add_child(exit_btn)
+	var exit_confirmation := ConfirmationDialog.new()
+	exit_confirmation.title = "Exit Open Theft Auto?"
+	exit_confirmation.dialog_text = "Are you sure you want to quit?"
+	exit_confirmation.confirmed.connect(func() -> void: get_tree().quit())
+	_boot.add_child(exit_confirmation)
+	exit_btn.pressed.connect(func() -> void: exit_confirmation.popup_centered())
 
-	var controls := _label(
-		"WASD move / drive    Mouse look    L-Click shoot    F enter/exit vehicle\n"
-		+ "Q / Tab / Z weapons    1-9 pick    scroll cycle    SHIFT sprint / boost\n"
-		+ "SPACE handbrake    E downtown kiosks    G enter Grand Prix (in an F1 car)    M mute    R respawn / heal\n"
-		+ "ESC pause menu — resume, rebind controls, or exit\n"
-		+ "GAMEPAD  L stick move/steer   R stick look   R2/L2 accel/brake   L2 aim · R2 fire   "
-		+ "paddle L sprint · paddle R melee   ✕ confirm   ○ back   Options pause",
-		15, Color(0.55, 0.57, 0.6))
-	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vb.add_child(controls)
+	var menu_panel := _panel(menu_buttons)
+	menu_panel.custom_minimum_size.x = 430
+	vb.add_child(menu_panel)
+	var controls_hint := _boot_label(
+		"WASD / mouse  ·  E interact  ·  ESC pause\n"
+		+ "Controller: left stick move  ·  A / ✕ confirm  ·  B / ○ back",
+		14, FAINT)
+	controls_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(controls_hint)
+
+	UiNav.apply.call_deferred(menu_buttons)
+	_build_boot_controls()
+	AudioFX.start_menu_music()
+
+
+func _graffiti_title() -> RichTextLabel:
+	var title := RichTextLabel.new()
+	title.name = "GraffitiTitle"
+	title.bbcode_enabled = true
+	title.fit_content = true
+	title.scroll_active = false
+	title.custom_minimum_size = Vector2(760, 96)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title.rotation_degrees = -1.4
+	title.text = _graffiti_bbcode("MARYLAND CITY")
+	title.add_theme_font_override("normal_font", _graffiti_font)
+	title.add_theme_font_size_override("normal_font_size", 70)
+	title.add_theme_color_override("font_outline_color", Color("17111f"))
+	title.add_theme_constant_override("outline_size", 5)
+	title.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+	title.add_theme_constant_override("shadow_offset_x", 5)
+	title.add_theme_constant_override("shadow_offset_y", 6)
+	return title
+
+
+func _graffiti_bbcode(text: String) -> String:
+	var colors := ["ff4fa3", "ffd84d", "50e0c3", "67a9ff", "c77dff", "ff8157"]
+	var result := ""
+	var color_index := 0
+	for index in text.length():
+		var character := text.substr(index, 1)
+		if character == " ":
+			result += character
+			continue
+		result += "[color=#%s]%s[/color]" % [
+			colors[color_index % colors.size()], character,
+		]
+		color_index += 1
+	return result
+
+
+func _boot_label(text: String, size: int, color: Color) -> Label:
+	var label := _label(text, size, color)
+	label.add_theme_font_override("font", _menu_font)
+	return label
+
+
+func _boot_button(text: String) -> Button:
+	var button := _accent_button(text)
+	button.name = text.to_pascal_case() + "Button"
+	button.custom_minimum_size = Vector2(360, 52)
+	button.add_theme_font_override("font", _menu_font)
+	button.add_theme_font_size_override("font_size", 18)
+	return button
+
+
+func _build_boot_controls() -> void:
+	_boot_controls = Control.new()
+	_boot_controls.name = "BootControlsView"
+	_boot_controls.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_boot_controls.mouse_filter = Control.MOUSE_FILTER_STOP
+	_boot_controls.visible = false
+	_boot.add_child(_boot_controls)
+
+	var shade := ColorRect.new()
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color(0.025, 0.035, 0.045, 0.96)
+	_boot_controls.add_child(shade)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_boot_controls.add_child(center)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 16)
+	center.add_child(content)
+
+	var title := _boot_label("CONTROLS", 38, TEXT)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(title)
+	var subtitle := _boot_label("KEYBOARD / MOUSE  AND  CONTROLLER", 15, GOLD)
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(subtitle)
+
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation", 18)
+	columns.add_child(_boot_controls_column("KEYBOARD / MOUSE", [
+		"Move / steer     %s %s %s %s" % [
+			InputConfig.binding_text("move_forward", "kb"),
+			InputConfig.binding_text("move_back", "kb"),
+			InputConfig.binding_text("move_left", "kb"),
+			InputConfig.binding_text("move_right", "kb"),
+		],
+		"Look             Mouse",
+		"Sprint / boost   %s" % InputConfig.binding_text("sprint_boost", "kb"),
+		"Aim              %s" % InputConfig.binding_text("aim", "kb"),
+		"Fire / alt fire  %s / %s" % [
+			InputConfig.binding_text("fire", "kb"),
+			InputConfig.binding_text("alt_fire", "kb"),
+		],
+		"Interact         %s" % InputConfig.binding_text("interact", "kb"),
+		"Enter / exit     %s" % InputConfig.binding_text("enter_exit", "kb"),
+		"Summon suit      %s" % InputConfig.binding_text("summon_suit", "kb"),
+		"Phone            %s" % InputConfig.binding_text("phone", "kb"),
+		"Weapons          %s / %s, 1-9, wheel" % [
+			InputConfig.binding_text("weapon_prev", "kb"),
+			InputConfig.binding_text("weapon_next", "kb"),
+		],
+		"Handbrake        %s" % InputConfig.binding_text("handbrake", "kb"),
+		"Pause            ESC",
+	]))
+	columns.add_child(_boot_controls_column("CONTROLLER", [
+		"Move / steer     Left stick",
+		"Look             Right stick",
+		"Accelerate       R2",
+		"Brake / reverse  L2",
+		"Aim / fire       L2 / R2",
+		"Alt fire         L1",
+		"Sprint / boost   L paddle / A",
+		"Melee            R paddle / R3",
+		"Interact         %s" % InputConfig.binding_text("interact", "pad"),
+		"Handbrake        same as Interact",
+		"Enter / exit     %s" % InputConfig.binding_text("enter_exit", "pad"),
+		"Summon suit      %s" % InputConfig.binding_text("summon_suit", "pad"),
+		"Phone            %s" % InputConfig.binding_text("phone", "pad"),
+		"Weapons          L1 / R1, D-pad",
+		"Menu             Options / Start",
+		"UI               D-pad / stick, A / ✕ select, B / ○ back",
+	]))
+	content.add_child(columns)
+
+	var back := _boot_button("BACK")
+	back.custom_minimum_size = Vector2(200, 46)
+	back.pressed.connect(_close_boot_controls)
+	var back_wrap := CenterContainer.new()
+	back_wrap.add_child(back)
+	content.add_child(back_wrap)
+	var rebind_hint := _boot_label("Controls can be rebound from the in-game pause menu.", 13, FAINT)
+	rebind_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(rebind_hint)
+
+
+func _boot_controls_column(title: String, lines: Array[String]) -> Control:
+	var rows := VBoxContainer.new()
+	rows.add_theme_constant_override("separation", 8)
+	rows.custom_minimum_size = Vector2(470, 0)
+	var heading := _boot_label(title, 18, GOLD)
+	rows.add_child(heading)
+	var details := _boot_label("\n".join(lines), 15, TEXT)
+	details.add_theme_color_override("font_color", TEXT)
+	details.custom_minimum_size.y = 310
+	rows.add_child(details)
+	return _panel(rows)
+
+
+func _open_boot_controls() -> void:
+	_boot_menu.visible = false
+	_boot_controls.visible = true
+	UiNav.set_focusable(_boot_menu, false)
+	UiNav.set_focusable(_boot_controls, true)
+	UiNav.apply.call_deferred(_boot_controls)
+
+
+func _close_boot_controls() -> void:
+	_boot_controls.visible = false
+	_boot_menu.visible = true
+	UiNav.set_focusable(_boot_controls, false)
+	UiNav.set_focusable(_boot_menu, true)
+	UiNav.apply.call_deferred(_boot_menu)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_instance_valid(_boot_controls) or not _boot_controls.visible:
+		return
+	var cancel := event.is_action_pressed("ui_cancel")
+	if event is InputEventJoypadButton and event.pressed \
+			and event.button_index == JOY_BUTTON_B:
+		cancel = true
+	if cancel:
+		_close_boot_controls()
+		get_viewport().set_input_as_handled()
 
 # ---------------- In-game HUD ----------------
 func _build_hud() -> void:
@@ -726,6 +964,7 @@ func _build_victory() -> void:
 # ---------------- Public API ----------------
 func enter_game() -> void:
 	_boot.visible = false
+	AudioFX.stop_menu_music()
 	_hud.visible = true
 	_death.visible = false
 	_victory.visible = false
@@ -865,6 +1104,10 @@ func update_hud(data: Dictionary) -> void:
 		_race_time.text = data.lap_time
 		_race_best.text = "BEST  " + str(data.best_lap)
 		_race_drift.text = "DRIFT  " + _commas(int(data.drift))
+
+
+func set_map_roads(segments: Array[Dictionary], water_segments: Array[Dictionary]) -> void:
+	_minimap.set_roads(segments, water_segments)
 
 
 ## Live spacecraft navigation readout — game.gd feeds this every frame while

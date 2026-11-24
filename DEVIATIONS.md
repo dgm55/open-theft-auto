@@ -54,10 +54,15 @@ following intentional differences exist.
 
 ## Visual / technical simplifications
 
-- **Roads/sidewalks** use flat-tinted materials instead of the prototype's
-  procedurally-painted canvas textures (asphalt grain, concrete). Stripes,
-  layout, and dimensions are unchanged.
-- **Crosswalk** decals are omitted (cosmetic only); road stripes are kept.
+- **City map** now uses the supplied Juiz de Fora-area GLB/OSM data instead of
+  the prototype's procedural LA-style street grid. OSM features provide the
+  urban geometry, road routing, named-place labels and building collision;
+  game-only businesses and safehouses remain procedural.
+- **Map scale** is reduced uniformly to fit the existing playable world and to
+  keep its airport, circuit and space facility reachable without changing their
+  movement systems.
+- Road markings and crossings are provided by the imported map model; no
+  additional procedural decals are generated.
 - **Sky** uses Godot's `ProceduralSkyMaterial` with day/night colour + sun
   animation instead of the Three.js Preetham `Sky` shader. Fog, lamp/window
   emissive, headlights, and the pulsing airport beacon are all driven by the
@@ -88,3 +93,22 @@ following intentional differences exist.
 - Deaths while in a vehicle, wearing the flight suit, or parachuting do not
   start this ragdoll; those cases remain outside the verified scope. NPCs,
   vehicles and normal movement remain kinematic.
+
+## GMC map integration (2026-11-24)
+
+- The supplied `GMC/map.glb` remains a coordinate reference for Manoel Honório,
+  Juiz de Fora, but its flat imported line/surface overlays are hidden.
+  `GMC/map_expanded.osm` now drives rebuilt terrain-following roads, mapped
+  building footprints, water/green areas, traffic routes and labels. A cropped
+  SRTM grid supplies terrain elevation and walkable height.
+- Since the OSM extract has only 12 building ways, deterministic procedural
+  low-rise and mid-rise infill adds up to 1,670 blocks along local and arterial
+  streets. These are explicitly approximated locations, not surveyed
+  footprints. Street View was consulted for qualitative street/sidewalk and
+  building scale around Av. Gov. Valadares, R. Ewbanck da Câmara and R. Américo
+  Lôbo; no Google images or image-derived building geometry is included.
+- The game businesses and buyable homes were moved around the mapped streets;
+  airport, F1 circuit, estate, wilderness facility and Moon remain separate
+  gameplay areas.
+- OpenStreetMap ODbL attribution and SRTM provenance are recorded in
+  `README.md`.

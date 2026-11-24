@@ -1,0 +1,11 @@
+; Engine configuration file.
+; Free sample made with Game Asset Factory. AI-generated base models: see README.txt and LICENSE.txt.
+
+config_version=5
+
+[application]
+
+config/name="Noduo Games – Free Sample Pack - Free Sample"
+config/description="AI-generated base models (Meshy), see README.txt"
+run/main_scene="res://NoduoGamesFreeSamplePack/Demo.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")

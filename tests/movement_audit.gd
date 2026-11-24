@@ -4,11 +4,13 @@ var test_z := 0.0
 var test_climb := 0.0
 var test_sprint := false
 var issues: Array[String] = []
+var melee_calls := 0
 func _move_x() -> float: return test_x
 func _move_z() -> float: return test_z
 func _updown() -> float: return test_climb
 func _drive_accel() -> float: return test_z
 func _sprint_held() -> bool: return test_sprint
+func _perform_melee() -> void: melee_calls += 1
 func _ready() -> void:
 	super._ready()
 	set_process(false)
@@ -38,10 +40,12 @@ func audit() -> void:
 	test_z = 0
 	for i in 30: _update_on_foot(1.0/60.0)
 	expect(_walk_vel.length() < 0.01, "Walking slides after release")
-	player_pos.y = 3
+	var test_ground_y := world.surface_height(player_pos.x, player_pos.z)
+	player_pos.y = test_ground_y + 3.0
 	_foot_vy = 0
 	_update_on_foot(1.0/60.0)
-	expect(player_pos.y > 2.9 and player_pos.y < 3, "Ledge descent teleports")
+	expect(player_pos.y > test_ground_y + 2.9 and player_pos.y < test_ground_y + 3.0,
+		"Ledge descent teleports")
 	for i in 120: _update_on_foot(1.0/60.0)
 	expect(absf(player_pos.y-world.surface_height(player_pos.x, player_pos.z)) < 0.02, "Ground landing")
 	space_state = "moon"
@@ -65,6 +69,8 @@ func audit() -> void:
 		if craft.phase == "landed": break
 	expect(craft.phase == "landed", "Spacecraft never lands")
 	expect(absf(craft.pos.y-world.moon_height(craft.pos.x, craft.pos.z)) < 0.01, "Spacecraft penetrates terrain")
+	_handle_pad_extra(JOY_BUTTON_RIGHT_STICK)
+	expect(melee_calls == 1, "Right-stick click fails as the melee fallback")
 	if issues.is_empty(): print("MOVEMENT_AUDIT_OK")
 	else:
 		for issue in issues: push_error(issue)

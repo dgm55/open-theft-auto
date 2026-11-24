@@ -1,0 +1,455 @@
+## Shape-creation drawer for the GoBuild editor panel.
+##
+## Renders a button for every registered shape in [ShapeCreationCatalog].
+## All shapes now launch the interactive 3-click draw controller which lets
+## the user draw the shape's bounding box directly in the viewport.
+##
+## [method insert_shape] remains the single canonical path for inserting a
+## new [GoBuildMeshInstance] — the draw controller commits through it.
+@tool
+class_name GoBuildCreateDrawer
+extends GoBuildDrawer
+
+# Self-preloads — dependency order.
+const _SEL_MGR_SCRIPT_CR   := preload("res://addons/go_build/core/selection_manager.gd")
+const _MESH_INST_SCRIPT_CR := preload("res://addons/go_build/core/go_build_mesh_instance.gd")
+const _DRAWER_SCRIPT_CR    := preload("res://addons/go_build/core/go_build_drawer.gd")
+const _SHAPE_CATALOG_SCRIPT_CR := \
+		preload("res://addons/go_build/mesh/generators/shape_creation_catalog.gd")
+const _SHAPE_PLACEMENT_SCRIPT_CR := \
+		preload("res://addons/go_build/core/shape_placement.gd")
+const _DRAW_CTRL_SCRIPT_CR := \
+		preload("res://addons/go_build/core/go_build_shape_draw_controller.gd")
+const _MESH_IMPORT_SCRIPT_CR := \
+		preload("res://addons/go_build/mesh/mesh_import.gd")
+const _DRAW_PARAM_POPUP_SCRIPT_CR := \
+		preload("res://addons/go_build/core/go_build_draw_param_popup.gd")
+const _DEFAULT_MAT := preload("res://addons/go_build/go_build_material.tres")
+
+var _align_to_surface_cb: CheckBox = null
+var _parent_mode_option: OptionButton = null
+var _param_strip: VBoxContainer = null
+var _param_controls: Dictionary = {}
+var _draw_param_popup: GoBuildDrawParamPopup = null
+
+
+func _ready() -> void:
+	_setup_drawer("Create Shape", true)
+
+	var align_hb := HBoxContainer.new()
+	_align_to_surface_cb = CheckBox.new()
+	_align_to_surface_cb.text = "Align to Surface"
+	_align_to_surface_cb.button_pressed = true
+	_align_to_surface_cb.tooltip_text = \
+			"Rotate new shapes so Y aligns with the surface normal"
+	_align_to_surface_cb.toggled.connect(_on_align_to_surface_toggled)
+	align_hb.add_child(_align_to_surface_cb)
+	_content.add_child(align_hb)
+
+	var parent_hb := HBoxContainer.new()
+	var parent_lbl := Label.new()
+	parent_lbl.text = "Insert as:"
+	parent_lbl.add_theme_font_size_override("font_size", 11)
+	parent_hb.add_child(parent_lbl)
+	_parent_mode_option = OptionButton.new()
+	_parent_mode_option.add_item("Child", GoBuildShapeDrawController.ParentMode.CHILD)
+	_parent_mode_option.add_item("Sibling", GoBuildShapeDrawController.ParentMode.SIBLING)
+	_parent_mode_option.add_item("Root", GoBuildShapeDrawController.ParentMode.ROOT)
+	_parent_mode_option.tooltip_text = \
+			"Child: under hit surface | Sibling: same parent | Root: scene root"
+	_parent_mode_option.item_selected.connect(_on_parent_mode_selected)
+	parent_hb.add_child(_parent_mode_option)
+	_content.add_child(parent_hb)
+
+	var grid := GridContainer.new()
+	grid.columns = 2
+	_content.add_child(grid)
+
+	for shape_name: String in ShapeCreationCatalog.all_shapes():
+		var btn := Button.new()
+		btn.text = shape_name
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.pressed.connect(_on_shape_button_pressed.bind(shape_name))
+		grid.add_child(btn)
+
+	_param_strip = VBoxContainer.new()
+	_param_strip.visible = false
+	_content.add_child(_param_strip)
+
+	# ── Import from MeshInstance3D ────────────────────────────────────────
+	_content.add_child(HSeparator.new())
+	var import_btn := Button.new()
+	import_btn.text = "Import Mesh"
+	import_btn.tooltip_text = (
+		"Convert the selected MeshInstance3D's mesh into a new\n"
+		+ "GoBuildMeshInstance. Works with any imported GLTF/OBJ mesh.\n"
+		+ "The original node is kept unchanged."
+	)
+	import_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	import_btn.add_theme_font_size_override("font_size", 11)
+	import_btn.pressed.connect(_on_import_mesh_pressed)
+	_content.add_child(import_btn)
+	_register_op(import_btn, _cond_has_mesh_instance)
+
+
+func _exit_tree() -> void:
+	if _draw_param_popup != null and is_instance_valid(_draw_param_popup):
+		_draw_param_popup.queue_free()
+	_draw_param_popup = null
+
+
+# ---------------------------------------------------------------------------
+# Shape button handler
+# ---------------------------------------------------------------------------
+
+func _on_shape_button_pressed(shape_name: String) -> void:
+	if not Engine.is_editor_hint():
+		return
+	if _plugin == null:
+		return
+	var align_to_surface: bool = \
+			_align_to_surface_cb.button_pressed if _align_to_surface_cb != null else true
+	var parent_mode: int = \
+			_parent_mode_option.get_selected_id() if _parent_mode_option != null \
+			else GoBuildShapeDrawController.ParentMode.CHILD
+	var sv: SubViewport = EditorInterface.get_editor_viewport_3d(0)
+	var camera: Camera3D = null
+	var screen_pos: Vector2 = Vector2.ZERO
+	if sv != null:
+		camera = sv.get_camera_3d()
+		screen_pos = Vector2(sv.size.x * 0.5, sv.size.y * 0.5)
+	var edited: GoBuildMeshInstance = _get_edited_instance()
+	var draw_ctrl: GoBuildShapeDrawController = _plugin.get("_shape_draw_controller")
+	if draw_ctrl == null:
+		return
+	draw_ctrl.start(shape_name, _plugin, align_to_surface, camera, screen_pos, edited)
+	draw_ctrl.set_parent_mode(parent_mode)
+	_show_param_strip(shape_name, draw_ctrl)
+
+
+func _on_align_to_surface_toggled(pressed: bool) -> void:
+	if _plugin == null:
+		return
+	var draw_ctrl: GoBuildShapeDrawController = _plugin.get("_shape_draw_controller")
+	if draw_ctrl == null or not draw_ctrl.is_active():
+		return
+	draw_ctrl.set_align_to_surface(pressed)
+
+
+func _on_parent_mode_selected(_index: int) -> void:
+	if _plugin == null:
+		return
+	var draw_ctrl: GoBuildShapeDrawController = _plugin.get("_shape_draw_controller")
+	if draw_ctrl == null or not draw_ctrl.is_active():
+		return
+	draw_ctrl.set_parent_mode(_parent_mode_option.get_selected_id())
+
+
+# ---------------------------------------------------------------------------
+# Parameter strip for non-drawable structural params
+# ---------------------------------------------------------------------------
+
+func _show_param_strip(shape_name: String, draw_ctrl: GoBuildShapeDrawController) -> void:
+	_clear_param_strip()
+	var specs: Array[Dictionary] = ShapeCreationCatalog.non_drawable_param_specs(shape_name)
+	if specs.is_empty():
+		_param_strip.visible = false
+		_close_draw_param_popup()
+		return
+	var get_param := func(k: String, def: Variant) -> Variant:
+		return draw_ctrl.get_extra_params().get(k, def)
+	var set_param := func(value: Variant, k: String) -> void:
+		draw_ctrl.set_extra_param(k, value)
+	_param_controls = _build_param_widgets(specs, _param_strip,
+			get_param, set_param, _on_param_button_pressed.bind(draw_ctrl), 11)
+	_param_strip.visible = true
+	_open_draw_param_popup(shape_name, draw_ctrl)
+
+
+func _open_draw_param_popup(shape_name: String, draw_ctrl: GoBuildShapeDrawController) -> void:
+	if not Engine.is_editor_hint():
+		return
+	var sv: SubViewport = EditorInterface.get_editor_viewport_3d(0)
+	var vp_parent := sv.get_parent() as Control
+	if sv == null or vp_parent == null:
+		return
+	if _draw_param_popup == null or not is_instance_valid(_draw_param_popup):
+		_draw_param_popup = _DRAW_PARAM_POPUP_SCRIPT_CR.new()
+		_draw_param_popup.z_index = 100
+		EditorInterface.get_base_control().add_child(_draw_param_popup)
+	var vp_screen_pos: Vector2 = vp_parent.get_global_rect().position
+	_draw_param_popup.open(
+			shape_name, draw_ctrl,
+			Rect2(vp_screen_pos, vp_parent.get_global_rect().size))
+
+
+func _close_draw_param_popup() -> void:
+	if _draw_param_popup != null and is_instance_valid(_draw_param_popup):
+		_draw_param_popup.close()
+
+
+func _clear_param_strip() -> void:
+	for child: Node in _param_strip.get_children():
+		child.queue_free()
+	_param_controls.clear()
+	_param_strip.visible = false
+
+
+func _on_param_button_pressed(
+		key: String,
+		draw_ctrl: GoBuildShapeDrawController,
+) -> void:
+	draw_ctrl.set_extra_param(key,
+			not bool(draw_ctrl.get_extra_params().get(key, false)))
+
+
+func hide_param_strip() -> void:
+	_clear_param_strip()
+	_close_draw_param_popup()
+
+
+## The visible floating draw param popup, or null.  The plugin uses this to
+## keep draw-commit routing away from clicks that land on the popup's own
+## controls (they must reach the popup's GUI, not the draw state machine).
+func get_param_popup() -> Control:
+	if _draw_param_popup != null and is_instance_valid(_draw_param_popup) \
+			and _draw_param_popup.visible:
+		return _draw_param_popup
+	return null
+
+
+# ---------------------------------------------------------------------------
+# Canonical insertion path
+# ---------------------------------------------------------------------------
+
+## Create a [GoBuildMeshInstance] populated by [param mesh_callable] and
+## insert it into the scene with full undo/redo and auto-selection.
+##
+## This is the single canonical insertion path used by all callers:
+## the draw controller, and any future programmatic callers.
+##
+## [param parent] is the parent [Node]; if null, scene root is used.
+## [param local_pos] is the position.  If [param parent] is the scene root,
+## this is treated as world-space via [code]global_position[/code]; otherwise
+## it is local to [param parent].
+func insert_shape(
+		mesh_callable: Callable,
+		node_name: String,
+		generator_params: Dictionary = {},
+		parent: Node = null,
+		local_pos: Vector3 = Vector3.ZERO,
+		local_basis: Basis = Basis.IDENTITY,
+) -> void:
+	if not Engine.is_editor_hint():
+		return
+	if _plugin == null:
+		push_warning("GoBuild: cannot insert shape — plugin reference not set")
+		return
+
+	var scene_root: Node = EditorInterface.get_edited_scene_root()
+	if scene_root == null:
+		push_warning("GoBuild: no open scene — create or open a scene first")
+		return
+
+	if parent == null:
+		parent = scene_root
+
+	var node := GoBuildMeshInstance.new()
+	node.name = node_name
+	node.go_build_mesh = mesh_callable.call()
+	# Persist the generating params for re-edit (popup reads the meta);
+	# empty dict → catalog defaults for the shape inferred from the name.
+	var shape_name: String = node_name.trim_prefix("GoBuild")
+	var params: Dictionary = generator_params
+	if params.is_empty():
+		params = _SHAPE_CATALOG_SCRIPT_CR.default_non_drawable_params(shape_name)
+	node.set_meta("go_build_params", params)
+	node.set_meta("go_build_shape", shape_name)
+	if parent == scene_root:
+		node.global_position = local_pos
+	else:
+		node.position = local_pos
+	if not local_basis.is_equal_approx(Basis.IDENTITY):
+		node.basis = local_basis
+	var default_mat: Material = _DEFAULT_MAT
+	if default_mat != null and node.go_build_mesh != null:
+		node.go_build_mesh.material_slots = [default_mat]
+		# The default material must be captured by the insert's undo
+		# snapshot AND reach the ArrayMesh (the setter only baked the
+		# empty-slot mesh) — rebake now, before the undo action.
+		node.bake()
+
+	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
+	ur.create_action("Insert " + node_name)
+	ur.add_do_method(parent, "add_child", node, true)
+	ur.add_do_method(node, "set_owner", scene_root)
+	ur.add_do_method(node, "capture_pristine_state")
+	ur.add_undo_method(parent, "remove_child", node)
+	ur.add_undo_reference(node)
+	ur.commit_action()
+
+	var es: EditorSelection = EditorInterface.get_selection()
+	es.clear()
+	es.add_node(node)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+
+## Return the currently edited [GoBuildMeshInstance] from the editor selection,
+## or null if none is selected.
+func _get_edited_instance() -> GoBuildMeshInstance:
+	if _plugin == null:
+		return null
+	var sel: EditorSelection = EditorInterface.get_selection()
+	if sel.get_selected_nodes().is_empty():
+		return null
+	var first: Node = sel.get_selected_nodes()[0]
+	if first is GoBuildMeshInstance:
+		return first as GoBuildMeshInstance
+	return null
+
+
+## Return whether the "Align to Surface" toggle is checked.
+func is_align_to_surface() -> bool:
+	if _align_to_surface_cb == null:
+		return true
+	return _align_to_surface_cb.button_pressed
+
+
+## Start the interactive shape draw positioned at the viewport center.
+## Called from the context menu "Add Shape" path.
+func start_shape_draw_at(
+		shape_name: String,
+		camera: Camera3D,
+		screen_pos: Vector2,
+		edited_node: GoBuildMeshInstance,
+) -> void:
+	if not Engine.is_editor_hint():
+		return
+	if _plugin == null:
+		return
+	var align_to_surface: bool = is_align_to_surface()
+	var parent_mode: int = \
+			_parent_mode_option.get_selected_id() if _parent_mode_option != null \
+			else GoBuildShapeDrawController.ParentMode.CHILD
+	var draw_ctrl: GoBuildShapeDrawController = _plugin.get("_shape_draw_controller")
+	if draw_ctrl == null:
+		return
+	draw_ctrl.start_at_position(shape_name, _plugin, align_to_surface, camera,
+			screen_pos, edited_node)
+	draw_ctrl.set_parent_mode(parent_mode)
+	_show_param_strip(shape_name, draw_ctrl)
+
+
+## Open the viewport param popup in re-edit mode when [param node] is a
+## pristine generated shape.  Called by the plugin on node selection.
+func maybe_open_param_popup(node: GoBuildMeshInstance) -> void:
+	if not Engine.is_editor_hint():
+		return
+	if _draw_param_popup == null or not is_instance_valid(_draw_param_popup):
+		_draw_param_popup = _DRAW_PARAM_POPUP_SCRIPT_CR.new()
+		_draw_param_popup.z_index = 100
+		EditorInterface.get_base_control().add_child(_draw_param_popup)
+	var shape_name: String = _infer_shape_name(node)
+	if shape_name.is_empty() or not node.is_pristine_state_valid():
+		_draw_param_popup.close()
+		return
+	var sv: SubViewport = EditorInterface.get_editor_viewport_3d(0)
+	if sv == null:
+		return
+	var vp_parent := sv.get_parent() as Control
+	if vp_parent == null:
+		return
+	_draw_param_popup.open_for_edit(
+			node, shape_name,
+			Rect2(vp_parent.get_global_rect().position, vp_parent.get_global_rect().size))
+
+
+## Infer the created shape name from a node name ("GoBuildStaircase" →
+## "Staircase"); empty when the node is not a generated shape.
+func _infer_shape_name(node: GoBuildMeshInstance) -> String:
+	if node == null:
+		return ""
+	# Committed nodes carry their generating shape in meta — authoritative
+	# even if the node was renamed.
+	if node.has_meta("go_build_shape"):
+		return str(node.get_meta("go_build_shape"))
+	if node.name.is_empty():
+		return ""
+	var n: String = node.name
+	if not n.begins_with("GoBuild"):
+		return ""
+	var candidate: String = n.trim_prefix("GoBuild")
+	for shape: String in ShapeCreationCatalog.all_shapes():
+		if shape == candidate:
+			return shape
+	return ""
+
+
+# ---------------------------------------------------------------------------
+# Import from MeshInstance3D
+# ---------------------------------------------------------------------------
+
+func _cond_has_mesh_instance() -> bool:
+	if _plugin == null:
+		return false
+	var sel: EditorSelection = EditorInterface.get_selection()
+	if sel.get_selected_nodes().is_empty():
+		return false
+	var first: Node = sel.get_selected_nodes()[0]
+	return first is MeshInstance3D and not (first is GoBuildMeshInstance)
+
+
+func _on_import_mesh_pressed() -> void:
+	if not Engine.is_editor_hint():
+		return
+	if _plugin == null:
+		return
+	var sel: EditorSelection = EditorInterface.get_selection()
+	if sel.get_selected_nodes().is_empty():
+		return
+	var source: Node = sel.get_selected_nodes()[0]
+	if not source is MeshInstance3D:
+		return
+	if source is GoBuildMeshInstance:
+		return
+	var src_mi: MeshInstance3D = source as MeshInstance3D
+	var src_mesh: Mesh = src_mi.mesh
+	if src_mesh == null:
+		push_warning("GoBuild: selected MeshInstance3D has no mesh resource")
+		return
+	if not src_mesh is ArrayMesh:
+		push_warning("GoBuild: mesh must be an ArrayMesh (imported GLTF/OBJ or generated)")
+		return
+	var go_mesh: GoBuildMesh = MeshImport.from_array_mesh(src_mesh as ArrayMesh)
+	if go_mesh.faces.is_empty():
+		push_warning("GoBuild: imported mesh has no geometry")
+		return
+
+	var scene_root: Node = EditorInterface.get_edited_scene_root()
+	if scene_root == null:
+		return
+	var node := GoBuildMeshInstance.new()
+	node.name = src_mi.name + "_GoBuild"
+	node.go_build_mesh = go_mesh
+	node.global_transform = src_mi.global_transform
+	var default_mat: Material = _DEFAULT_MAT
+	if default_mat != null:
+		node.go_build_mesh.material_slots = [default_mat]
+		node.bake()
+	var parent: Node = src_mi.get_parent()
+	if parent == null:
+		parent = scene_root
+	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
+	ur.create_action("Import Mesh to GoBuild")
+	ur.add_do_method(parent, "add_child", node, true)
+	ur.add_do_method(node, "set_owner", scene_root)
+	ur.add_do_method(node, "capture_pristine_state")
+	ur.add_undo_method(parent, "remove_child", node)
+	ur.add_undo_reference(node)
+	ur.commit_action()
+
+	var es: EditorSelection = EditorInterface.get_selection()
+	es.clear()
+	es.add_node(node)

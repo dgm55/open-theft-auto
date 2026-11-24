@@ -7,8 +7,8 @@ class_name PropertyCatalog
 ## the house itself is built just behind it.
 
 const LIST: Array = [
-	{"name": "Vespucci Beach House",   "price": 300_000,    "x": -128.0, "z": 128.0},
-	{"name": "Mirror Park Home",       "price": 1_500_000,  "x": 128.0,  "z": -128.0},
-	{"name": "Rockford Villa",         "price": 6_000_000,  "x": -128.0, "z": -128.0},
-	{"name": "Vinewood Hills Estate",  "price": 25_000_000, "x": -128.0, "z": 0.0},
+	{"name": "Manoel Honório House", "price": 300_000, "x": -250.0, "z": 340.0},
+	{"name": "Bairu Home", "price": 1_500_000, "x": 250.0, "z": -340.0},
+	{"name": "Mariano Procópio Villa", "price": 6_000_000, "x": -250.0, "z": -340.0},
+	{"name": "Centro Estate", "price": 25_000_000, "x": 250.0, "z": 340.0},
 ]

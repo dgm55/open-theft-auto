@@ -166,6 +166,7 @@ var _race_active := false        # the player is currently in a structured race
 var _race_count_shown := -1      # last countdown number announced
 var _owned_spawn = null          # the player's last car spawned onto the lot
 var player_node: Node3D
+var capybara_pet: CapybaraPet
 var _ragdoll_collision_proxy: Node3D
 var weapon_holder: Node3D       # holds the visible weapon prop in the player's hand
 
@@ -354,6 +355,7 @@ func _ready() -> void:
 
 	hud = HUD.new()
 	add_child(hud)
+	hud.set_map_roads(world.map_roads, world.map_water_segments)
 	hud.start_pressed.connect(_on_start)
 	hud.new_game_pressed.connect(func() -> void: SaveGame.clear(); _on_start())
 	hud.respawn_pressed.connect(_respawn)
@@ -497,9 +499,14 @@ func _on_start() -> void:
 	_hunt_name = ""
 	_hunt_pos = Vector2.ZERO
 	var s := world.find_safe_spawn()
-	player_pos = Vector3(s.x, 0, s.y)
+	player_pos = Vector3(s.x, world.surface_height(s.x, s.y), s.y)
 	player_node.position = player_pos
 	player_node.visible = true
+	if not is_instance_valid(capybara_pet):
+		capybara_pet = CapybaraPet.new()
+		add_child(capybara_pet)
+	capybara_pet.position = player_pos + Vector3(-2.0, 0.0, -1.5)
+	capybara_pet.visible = true
 	# Densities scaled for the expanded 13x13 grid (was 40/40 on 11x11).
 	_spawn_vehicles(54)
 	_spawn_airport_aircraft()
@@ -689,7 +696,7 @@ func _respawn() -> void:
 		s = Vector2(home.x, home.z)
 	else:
 		s = world.find_safe_spawn()
-	player_pos = Vector3(s.x, 0, s.y)
+	player_pos = Vector3(s.x, world.surface_height(s.x, s.y), s.y)
 	player_node.position = player_pos
 	player_node.rotation.y = player_yaw
 	_walk_vel = Vector2.ZERO
@@ -748,16 +755,9 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton and event.pressed:
 		if not GameState.started:
 			# With a save on disk the boot screen shows CONTINUE / NEW GAME and
-			# UiNav gives them gamepad focus — let A (ui_accept) reach the
-			# focused button instead of force-continuing, or NEW GAME would be
-			# unreachable without a mouse. START stays a quick "continue".
-			if SaveGame.has_save():
-				if event.button_index == JOY_BUTTON_START:
-					Gamepad.pulse(0.0, 0.4, 0.12)
-					_on_start()
-					get_viewport().set_input_as_handled()
-					return
-			elif event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START, JOY_BUTTON_X]:
+			# UiNav lets A (ui_accept) activate the focused choice; START remains
+			# a quick-start shortcut and must not steal menu navigation.
+			if event.button_index == JOY_BUTTON_START:
 				Gamepad.pulse(0.0, 0.4, 0.12)
 				_on_start()
 				get_viewport().set_input_as_handled()
@@ -909,6 +909,9 @@ func _handle_pad_extra(idx: int) -> void:
 		JOY_BUTTON_DPAD_LEFT:
 			if in_car == null:
 				_switch_weapon(-1)
+		JOY_BUTTON_RIGHT_STICK:
+			if InputConfig.action_bound_to_pad_button(idx).is_empty():
+				_perform_melee()
 
 
 func _action_held(name: String) -> bool:
@@ -1520,6 +1523,14 @@ func _process(delta: float) -> void:
 	else:
 		_update_on_foot(dt)
 
+	if is_instance_valid(capybara_pet):
+		var pet_can_follow := in_car == null and not parachuting \
+			and suit_state == "none" and space_state.is_empty() \
+			and player_pos.y < 10.0 and player_hp > 0.0
+		capybara_pet.visible = pet_can_follow
+		if pet_can_follow:
+			capybara_pet.follow(world, player_pos, player_yaw, dt)
+
 	# The turbofan loop lives only while flying the actual plane — this one
 	# idempotent stop covers exit, bail-out, explosion and vehicle swaps.
 	if in_car == null or not in_car.is_plane or in_car.get("is_heli", false) \
@@ -2014,10 +2025,10 @@ func _update_car(v: Dictionary, dt: float) -> void:
 			vehicles.erase(v)
 			if mine:
 				in_car = null
-				player_pos = Vector3(ex, 0, ez)
+				player_pos = Vector3(ex, world.surface_height(ex, ez), ez)
 				if world.collides_at(ex, ez, 0.5):
 					var s := world.find_safe_spawn()
-					player_pos = Vector3(s.x, 0, s.y)
+					player_pos = Vector3(s.x, world.surface_height(s.x, s.y), s.y)
 				player_hp -= 30.0
 				player_node.visible = true
 
@@ -3274,10 +3285,11 @@ func _spawn_npc() -> void:
 		var node := Human.build_model(Human.CIVILIAN_KINDS.pick_random(),
 			NPC_SKINS.pick_random(), NPC_SHIRTS.pick_random(),
 			NPC_PANTS.pick_random(), NPC_HAIR.pick_random(), -1, randf() < 0.5)
-		node.position = Vector3(x, 0, z)
+		var ground_y := world.surface_height(x, z)
+		node.position = Vector3(x, ground_y, z)
 		add_child(node)
 		npcs.append({
-			"node": node, "pos": Vector3(x, 0, z), "yaw": randf() * TAU,
+			"node": node, "pos": Vector3(x, ground_y, z), "yaw": randf() * TAU,
 			"hp": 35.0, "max_hp": 35.0, "walk_timer": 0.0,
 			"walk_phase": randf() * TAU, "cash": 5 + (randi() % 30),
 		})
@@ -3308,7 +3320,7 @@ func _update_npcs(dt: float) -> void:
 			n.walk_phase += dt * 10.0
 			Human.animate(n.node, n.walk_phase, true, 0.35, 0.95)
 			n.node.position = n.pos
-			n.node.position.y = absf(sin(n.walk_phase)) * 0.18
+			n.node.position.y += absf(sin(n.walk_phase)) * 0.18
 			n.node.rotation.y = n.yaw
 			continue
 		var nx: float = n.pos.x + sin(n.yaw) * 2.5 * dt
@@ -3321,6 +3333,7 @@ func _update_npcs(dt: float) -> void:
 			n.pos.z = nz
 		else:
 			n.yaw += PI
+		n.pos.y = world.surface_height(n.pos.x, n.pos.z)
 		n.node.position = n.pos
 		n.node.rotation.y = n.yaw
 		n.walk_phase += dt * 6.0
@@ -4209,10 +4222,11 @@ func _update_racers(dt: float) -> void:
 
 func _make_vehicle(x: float, z: float, color: int, style := "sedan") -> Dictionary:
 	var g := CarMesh.build(color, style, false, head_mat, tail_mat)
-	g.position = Vector3(x, 0, z)
+	var ground_y := world.surface_height(x, z)
+	g.position = Vector3(x, ground_y, z)
 	add_child(g)
 	return {
-		"node": g, "pos": Vector3(x, 0, z), "yaw": randf() * TAU, "speed": 0.0,
+		"node": g, "pos": Vector3(x, ground_y, z), "yaw": randf() * TAU, "speed": 0.0,
 		"max_speed": 28.0, "hp": 100.0, "max_hp": 100.0, "style": style,
 		"burning": false, "burn_timer": 0.0, "is_plane": false, "propeller": null,
 	}
@@ -5893,24 +5907,19 @@ func _wrap_rotor_pivot(model: Node3D, name_pattern: String, hub_center: Vector3)
 
 
 func _spawn_vehicles(n: int) -> void:
+	if world.map_roads.is_empty():
+		push_error("Traffic cannot spawn because the map has no drivable roads")
+		return
 	for i in n:
 		for tries in 30:
-			var gx := randi() % CityWorld.GRID
-			var gz := randi() % CityWorld.GRID
-			var on_x := randf() < 0.5
-			var x: float
-			var z: float
-			if on_x:
-				x = -CityWorld.WORLD_HALF + gx * CityWorld.BLOCK
-				z = -CityWorld.WORLD_HALF + gz * CityWorld.BLOCK + CityWorld.BLOCK / 2.0
-			else:
-				x = -CityWorld.WORLD_HALF + gx * CityWorld.BLOCK + CityWorld.BLOCK / 2.0
-				z = -CityWorld.WORLD_HALF + gz * CityWorld.BLOCK
+			var road_spawn := world.random_road_spawn()
+			var x: float = road_spawn.x
+			var z: float = road_spawn.z
 			if world.collides_at(x, z, 2.0):
 				continue
 			var v := _make_vehicle(x, z, VEHICLE_COLORS.pick_random(),
 				TRAFFIC_STYLES.pick_random())
-			v.yaw = 0.0 if on_x else PI / 2.0
+			v.yaw = road_spawn.yaw
 			v.node.rotation.y = v.yaw
 			vehicles.append(v)
 			break

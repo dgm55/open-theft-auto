@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://b2wiyvqjhmwp8"]
+
+[ext_resource type="PackedScene" uid="uid://8stm3egnnj8f" path="res://map.glb" id="1_a202f"]
+
+[node name="Node3D" type="Node3D" unique_id=1261734592]
+
+[node name="Innerscene 3D Viewer _ osm" parent="." unique_id=76233818 instance=ExtResource("1_a202f")]
